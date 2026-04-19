@@ -2,7 +2,7 @@
 
 **Scop:** fiecare regulă materială din `.cursor/rules/stacks-0x-*.mdc` (workspace `/opt/stacks/.cursor/rules/`) are cerință operațională, artefact de dovadă în `cerniq_app_v2_CB` sau procedură de audit, și status.
 
-**Audit rapid (repo):** `python3 tools/ci/run_gates.py` din rădăcina monorepo.
+**Audit rapid (repo):** `python3 tools/ci/run_gates.py` din rădăcina monorepo (include verificarea integrității [golden-thread-matrix.md](enterprise/golden-thread-matrix.md) prin `golden_thread_matrix_gate.py`).
 
 | ID | stacks | Cerință (rezumat) | Artefact / comandă audit | Status |
 |----|--------|-------------------|--------------------------|--------|

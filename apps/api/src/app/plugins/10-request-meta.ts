@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
+import { pickRequestIdHeader } from '../../lib/http-request-id';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -10,9 +11,8 @@ declare module 'fastify' {
 
 const plugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('onRequest', async (request, reply) => {
-    const incoming = request.headers['x-request-id'];
-    const id =
-      typeof incoming === 'string' && incoming.length > 0 ? incoming : randomUUID();
+    const incoming = pickRequestIdHeader(request.headers['x-request-id']);
+    const id = incoming ?? randomUUID();
     request.requestId = id;
     reply.header('X-Request-Id', id);
   });

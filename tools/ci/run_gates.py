@@ -11,6 +11,7 @@ GATES = [
     "traefik_no_hazardous_compose_ports.py",
     "no_critical_placeholders.py",
     "orchestration_manifests.py",
+    "golden_thread_matrix_gate.py",
     "lockfile_hash_echo.py",
 ]
 
