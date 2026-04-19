@@ -1,23 +1,28 @@
 import Fastify from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { app } from './app/app';
 
 const host = process.env.HOST ?? 'localhost';
 const port = process.env.PORT ? Number(process.env.PORT) : 25010;
 
-// Instantiate Fastify with some config
 const server = Fastify({
-  logger: true,
+  logger: {
+    level: process.env.LOG_LEVEL ?? 'info',
+  },
+  genReqId: (req) => {
+    const h = req.headers['x-request-id'];
+    return typeof h === 'string' && h.length > 0 ? h : randomUUID();
+  },
+  disableRequestLogging: false,
 });
 
-// Register your application as a normal plugin.
 server.register(app);
 
-// Start listening.
 server.listen({ port, host }, (err) => {
   if (err) {
     server.log.error(err);
     process.exit(1);
   } else {
-    console.log(`[ ready ] http://${host}:${port}`);
+    server.log.info({ port, host }, 'api ready');
   }
 });

@@ -26,6 +26,12 @@
   "references": [
     {
       "path": "../../packages/gateways/gateway-hello/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/llm/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/messaging/tsconfig.lib.json"
     }
   ]
 }

@@ -1,0 +1,513 @@
+---
+alwaysApply: true
+globs: "**/*"
+description: /opt/stacks — matrice porturi infrastructură. Oglindire .cursorrules/05-port-matrix.md
+---
+
+> **Sursă canonică (editare):** `.cursorrules/05-port-matrix.md` — păstrează aceste două locații aliniate dacă editezi manual.
+
+# 05. PORT MATRIX — COMPLETE INFRASTRUCTURE PORT MAP
+
+> **Sursa datelor:** `ss -tlnp`, `docker ps --format`, `docker port`, `docker network inspect`, `haproxy.cfg` executate live pe **toate cele 22 de mașini** din infrastructură la data de 2026-04-18. HAProxy config complet extras din `hz.247:/etc/haproxy/haproxy.cfg`. Zero presupuneri.
+
+---
+
+## A. ORCHESTRATOR — `77.42.76.185` / `10.0.0.2`
+
+### A1. Porturi publice (bind pe `0.0.0.0` / `*`)
+
+| Port | Serviciu | Proces | Docker Container | Docker Network |
+|---|---|---|---|---|
+| `22/tcp` | SSH | `sshd` | — | — |
+| `25/tcp` | SMTP | docker-proxy | `stalwart` | `traefik_default` (172.18.0.3) |
+| `80/tcp` | HTTP | `traefik` | host network | — |
+| `111/tcp` | RPC | `rpcbind` | — | — |
+| `143/tcp` | IMAP | docker-proxy | `stalwart` | `traefik_default` (172.18.0.3) |
+| `443/tcp` | HTTPS | `traefik` | host network | — |
+| `465/tcp` | SMTPS | docker-proxy | `stalwart` | `traefik_default` (172.18.0.3) |
+| `587/tcp` | Submission | docker-proxy | `stalwart` | `traefik_default` (172.18.0.3) |
+| `993/tcp` | IMAPS | docker-proxy | `stalwart` | `traefik_default` (172.18.0.3) |
+| `4190/tcp` | ManageSieve | docker-proxy | `stalwart` | `traefik_default` (172.18.0.3) |
+| `8200/tcp` | OpenBao/Vault | `bao` | host network | — |
+| `8888/tcp` | TinyProxy | `tinyproxy` | — | — |
+
+### A2. Porturi interne
+
+| Port | Bind Address | Serviciu | Container | Network |
+|---|---|---|---|---|
+| `85/tcp` | `127.0.0.1` | PVE Daemon | — | — |
+| `1080/tcp` | `10.0.0.2` | MicroSOCKS | — | — |
+| `3128/tcp` | `*` | SpiceProxy | — | — |
+| `3333/tcp` | `*` | InternalCMDB (Next.js) | `internalcmdb-frontend` | host |
+| `4180/tcp` | `*` | OAuth2 Proxy | `cloudbeaver-oauth2-proxy-1` | host |
+| `4444/tcp` | `0.0.0.0` | InternalCMDB API (uvicorn) | `internalcmdb-api` | host |
+| `5432/tcp` | `*` | Traefik TCP Router (PgBouncer) | `traefik` | host |
+| `5433/tcp` | `127.0.0.1` | InternalCMDB Postgres | `internalcmdb-postgres` | `internalcmdb_net` (172.21.0.2) |
+| `6379/tcp` | `10.0.0.2` | Redis Shared | `redis-shared` | `bridge` (172.17.0.2) |
+| `8006/tcp` | `*` | Proxmox WebUI | — | — |
+| `8080/tcp` | `*` | Zitadel (deprecated!) | `zitadel-zitadel-1` | host |
+| `8201/tcp` | `*` | OpenBao Cluster | `openbao` | host |
+| `8978/tcp` | `*` | CloudBeaver | `cloudbeaver-cloudbeaver-1` | host |
+
+### A3. Docker Compose Projects
+
+| Project | Status | Config Path |
+|---|---|---|
+| `cloudbeaver` | running(2) | `/opt/cloudbeaver/docker-compose.yml` |
+| `internalcmdb` | running(1) | `/root/internalcmdb/docker-compose.yml` |
+| `observability` | running(8) | `/opt/observability/docker-compose.yml` |
+| `openbao` | running(1) | `/opt/openbao/docker-compose.yml` |
+| `orchestrator` | running(3) | `/opt/stacks/internalcmdb/deploy/orchestrator/docker-compose.internalcmdb.yml` |
+| `stalwart` | running(1) | `/opt/stalwart/docker-compose.yml` |
+| `traefik` | running(2) | `/opt/traefik/docker-compose.yml` |
+| `zitadel` | running(1) | `/opt/zitadel/docker-compose.yml` |
+
+### A4. Docker Networks
+
+| Network | Subnet | Driver |
+|---|---|---|
+| `bridge` | `172.17.0.0/16` | bridge |
+| `internalcmdb_net` | `172.21.0.0/16` | bridge |
+| `observability` | `172.19.0.0/16` | bridge |
+| `traefik_default` | `172.18.0.0/16` | bridge |
+
+### A5. Observability Stack (porturi interne, fără publish)
+
+| Container | Docker IP | Network | Rol |
+|---|---|---|---|
+| `cadvisor` | `172.19.0.2` | observability | Docker metrics |
+| `postgres-exporter` | `172.19.0.3` | observability | PostgreSQL metrics |
+| `vector` | `172.19.0.4` | observability | Log shipper |
+| `redis-exporter` | `172.19.0.5` | observability | Redis metrics |
+| `node-exporter` | `172.19.0.6` | observability | Node metrics |
+| `blackbox-exporter` | `172.19.0.7` | observability | Probe checks |
+| `alertmanager` | `172.19.0.8` | observability | Alert routing |
+| `tempo` | `172.19.0.9` + `172.18.0.4` | observability + traefik_default | Tracing |
+
+---
+
+## B. HAProxy VIP `10.0.1.10` (pe hz.247) — CENTRAL GATEWAY
+
+> HAProxy pe `hz.247` ascultă exclusiv pe VIP `10.0.1.10`. Aceasta este **matricea completă** a tuturor porturilor, extrasă din `/etc/haproxy/haproxy.cfg` (611 linii).
+
+### B1. Servicii Shared (Traefik + Redis)
+
+| VIP Port | Backend | Dest Port | Protocol | Scop |
+|---|---|---|---|---|
+| `443` | `10.0.0.2` (orchestrator) | `443` | TCP | Traefik TLS Proxy |
+| `6379` | `10.0.0.2` (orchestrator) | `6379` | TCP | Redis Shared Proxy |
+
+### B2. Cerniq Staging (CT110 — `10.0.1.110`)
+
+| VIP Port | Backend Port | Serviciu | Timeout |
+|---|---|---|---|
+| `19000` | `10.0.1.110:64000` | Cerniq Web (staging) | default |
+| `19010` | `10.0.1.110:64010` | Cerniq API (staging) | default |
+| `19012` | `10.0.1.110:64012` | Cerniq Admin (staging) | default |
+| `19094` | `10.0.1.110:64094` | Cadvisor (staging) | default |
+| `19095` | `10.0.1.110:64095` | PgBouncer Exporter (staging) | default |
+| `19100` | `10.0.1.110:9100` | Node Exporter (staging) | default |
+
+### B3. Cerniq Production (CT109 — `10.0.1.109`)
+
+| VIP Port | Backend Port | Serviciu | Timeout |
+|---|---|---|---|
+| `29000` | `10.0.1.109:64000` | Cerniq Web (prod) | default |
+| `29010` | `10.0.1.109:64010` | Cerniq API (prod) | default |
+| `29012` | `10.0.1.109:64012` | Cerniq Admin (prod) | default |
+| `29094` | `10.0.1.109:64094` | Cadvisor (prod) | default |
+| `29095` | `10.0.1.109:64095` | PgBouncer Exporter (prod) | default |
+| `29100` | `10.0.1.109:9100` | Node Exporter (prod) | default |
+
+### B4. Neanelu Staging (CT112 — `10.0.1.112`)
+
+| VIP Port | Backend Port | Serviciu | Timeout |
+|---|---|---|---|
+| `19200` | `10.0.1.112:9100` | Node Exporter (staging) | default |
+| `19210` | `10.0.1.112:65210` | Cadvisor (staging) | default |
+| `19211` | `10.0.1.112:65211` | PgBouncer Exporter (staging) | default |
+| `19250` | `10.0.1.112:65000` | Neanelu API (staging) | default |
+| `19251` | `10.0.1.112:65001` | Neanelu Admin (staging) | default |
+
+### B5. Neanelu Production (CT111 — `10.0.1.111`)
+
+| VIP Port | Backend Port | Serviciu | Timeout |
+|---|---|---|---|
+| `29200` | `10.0.1.111:9100` | Node Exporter (prod) | default |
+| `29210` | `10.0.1.111:65210` | Cadvisor (prod) | default |
+| `29211` | `10.0.1.111:65211` | PgBouncer Exporter (prod) | default |
+| `29250` | `10.0.1.111:65000` | Neanelu API (prod) | default |
+| `29251` | `10.0.1.111:65001` | Neanelu Admin (prod) | default |
+
+### B6. Neanelu Dev (hz.164 — `10.0.1.6`)
+
+| VIP Port | Backend Port | Serviciu | Timeout |
+|---|---|---|---|
+| `39200` | `10.0.1.6:9100` | Node Exporter (dev) | default |
+| `39210` | `10.0.1.6:65210` | Cadvisor (dev) | default |
+| `39211` | `10.0.1.6:65211` | PgBouncer Exporter (dev) | default |
+| `39250` | `10.0.1.6:65100` | Neanelu API (dev) | default |
+| `39251` | `10.0.1.6:65101` | Neanelu Admin (dev) | default |
+
+### B7. LLM Infrastructure
+
+| VIP Port | Backend | Dest Port | Serviciu | Timeout Server |
+|---|---|---|---|---|
+| `49000` | `10.0.1.13` (hz.113) | `3000` | Open WebUI | 300s |
+| `49001` | `10.0.1.13` (hz.113) | `8001` | vLLM QwQ-32B-AWQ (reasoning) | 600s |
+| `49002` | `10.0.1.13` (hz.113) | `8002` | vLLM Qwen2.5-14B-AWQ (fast) | 300s |
+| `49003` | `10.0.1.62` (hz.62) | `8003` | Ollama Embedding (Qwen3-8B) | 120s |
+| `49004` | `10.0.0.2` (orch.) | `8000` | LLM Guardrails API (HTTP mode, auth!) | default |
+
+### B8. LLM Monitoring
+
+| VIP Port | Backend | Dest Port | Serviciu |
+|---|---|---|---|
+| `49110` | `10.0.1.13` | `9100` | hz.113 node-exporter |
+| `49111` | `10.0.1.13` | `9835` | hz.113 nvidia-gpu-exporter |
+| `49112` | `10.0.1.13` | `8080` | hz.113 cadvisor |
+
+### B9. WAPP Pro App (CT105 — `10.0.1.105`)
+
+| VIP Port | Backend Port | Protocol | Serviciu | Timeout Server |
+|---|---|---|---|---|
+| `26010` | `10.0.1.105:26001` | HTTP | WAPP Gateway (WebSocket) | 86400s |
+| `26011` | `10.0.1.105:26002` | HTTP | WAPP Admin (Next.js) | 300s |
+| `26012` | `10.0.1.105:26000` | HTTP | Evolution API | 300s |
+| `26013` | `10.0.1.105:26004` | HTTP | Workers Health/Metrics | 120s |
+
+### B10. SOCKS5 Proxy Mesh (WhatsApp)
+
+| VIP Port | Backend Node | Backend Port | Subnet Alocat | Tier |
+|---|---|---|---|---|
+| `26100` | `10.0.1.62` (hz.62) | `1080` | 95.216.66.0/24 | 1 |
+| `26101` | `10.0.1.13` (hz.113) | `1080` | 49.13.97.0/24 | 1 |
+| `26102` | `10.0.1.4` (hz.118) | `1080` | 95.216.72.0/24 | 1 |
+| `26103` | `10.0.1.5` (hz.123) | `1080` | 94.130.68.0/24 | 1 |
+| `26104` | `10.0.1.3` (hz.157) | `1080` | 95.216.225.0/24 | 1 |
+| `26105` | `10.0.1.6` (hz.164) | `1080` | 135.181.183.0/24 | 1 |
+| `26106` | `10.0.1.9` (hz.215) | `1080` | 95.216.36.0/24 | 1 |
+| `26107` | `10.0.1.8` (hz.223) | `1080` | 95.217.32.0/24 | 1 |
+| `26108` | `10.0.1.7` (hz.247) | `1080` | 95.216.68.0/24 | 1 |
+| `26109` | `10.0.0.2` (orch.) | `1080` | 77.42.76.0/24 | 1 |
+| `26110` | `10.0.1.4` (hz.118) | `1081` | 95.216.125.0/24 | 2 |
+
+---
+
+## C. hz.113 — `49.13.97.113` / `10.0.1.13` (AI GPU Server)
+
+| Port | Bind | Serviciu | Container | Network |
+|---|---|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH | — | — |
+| `1080/tcp` | `10.0.1.13` | MicroSOCKS | — | — |
+| `3000/tcp` | `10.0.1.13` | Open WebUI | `open-webui` → `8080` | `ai-infrastructure_default` (172.18.0.4) |
+| `8001/tcp` | `10.0.1.13` | vLLM QwQ-32B | `vllm-qwq-32b` → `8000` | `ai-infrastructure_default` (172.18.0.2) |
+| `8002/tcp` | `10.0.1.13` | vLLM Qwen-14B | `vllm-qwen-14b` → `8000` | `ai-infrastructure_default` (172.18.0.3) |
+| `8080/tcp` | `10.0.1.13` | Cadvisor | `cadvisor` → `8080` | `monitoring_default` (172.19.0.2) |
+| `9100/tcp` | `10.0.1.13` | Node Exporter | host network | — |
+| `9835/tcp` | `10.0.1.13` | NVIDIA GPU Exporter | host network | — |
+
+Docker Projects: `ai-infrastructure` (4 containers), `monitoring` (3 containers)
+
+---
+
+## D. hz.62 — `95.216.66.62` / `10.0.1.62` (Embedding GPU)
+
+| Port | Bind | Serviciu | Container | Network |
+|---|---|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH | — | — |
+| `1080/tcp` | `10.0.1.62` | MicroSOCKS | — | — |
+| `8003/tcp` | `10.0.1.62` | Ollama Embed | `ollama-embed` → `11434` | `ai-infrastructure-embed_default` (172.18.0.2) |
+| `9100/tcp` | `*` | Node Exporter | host network | — |
+| `9180/tcp` | `0.0.0.0` | Cadvisor | `cadvisor` → `8080` | `monitoring_default` (172.19.0.2) |
+| `9835/tcp` | `*` | NVIDIA GPU Exporter | host network | — |
+
+---
+
+## E. hz.164 — `135.181.183.164` / `10.0.1.6` (Dev Server)
+
+| Port | Bind | Serviciu | Container → Internal | Network |
+|---|---|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH | — | — |
+| `1080/tcp` | `10.0.1.6` | MicroSOCKS | — | — |
+| `5432/tcp` | `127.0.0.1` | PostgreSQL (local) | — | — |
+| `6379/tcp` | `127.0.0.1` | Redis (local) | — | — |
+| `6432/tcp` | `127.0.0.1` | PgBouncer (Neanelu dev) | `neanelu-pgbouncer` → `6432` | `neanelu_default` (172.29.0.9) |
+| `9100/tcp` | `*` | Node Exporter | host network | — |
+| `55433/tcp` | `0.0.0.0` | Postgres (migration) | `cerniq-migrate-pg` → `5432` | `bridge` (172.17.0.2) |
+| `64000/tcp` | `0.0.0.0` | Cerniq Web (dev) | `cerniq-dev-web` → `64000` | `cerniq-dev_cerniq_backend` (172.30.20.4) |
+| `64010/tcp` | `0.0.0.0` | Cerniq API (dev) | `cerniq-dev-api` → `64010` | `cerniq-dev_cerniq_backend` (172.30.20.12) |
+| `64012/tcp` | `0.0.0.0` | Cerniq Admin (dev) | `cerniq-dev-admin` → `64012` | `cerniq-dev_cerniq_backend` (172.30.20.2) |
+| `64080/tcp` | `0.0.0.0` | Cerniq Monitoring API (dev) | `cerniq-dev-monitoring-api` → `64080` | `cerniq-dev_cerniq_backend` (172.30.20.7) |
+| `64094/tcp` | `*` | Cadvisor | — | `neanelu_default` (172.29.0.5) |
+| `65100/tcp` | `0.0.0.0` | Neanelu Worker (dev) | `neanelu-backend-worker-dev` → `65000` | `neanelu_default` (172.29.0.6) |
+| `65101/tcp` | `0.0.0.0` | Neanelu Admin (dev) | `neanelu-web-admin-dev` → `65001` | `neanelu_default` (172.29.0.8) |
+| `65210/tcp` | `0.0.0.0` | Cadvisor (Neanelu dev) | `neanelu-cadvisor` → `8080` | `neanelu_default` (172.29.0.5) |
+| `65211/tcp` | `0.0.0.0` | PgBouncer Exporter (dev) | `neanelu-pgbouncer-exporter` → `9127` | `neanelu_default` (172.29.0.10) |
+
+Docker Projects: `cerniq-dev` (9 containers), `neanelu` (10 containers)
+
+---
+
+## F. hz.123 — `94.130.68.123` / `10.0.1.5` (Flowxify)
+
+| Port | Bind | Serviciu | Container → Internal | Network |
+|---|---|---|---|---|
+| `21/tcp` | `*` | FTP | `vsftpd` | — |
+| `22/tcp` | `0.0.0.0` | SSH | — | — |
+| `80/tcp` | `0.0.0.0` | Nginx | — | — |
+| `443/tcp` | `0.0.0.0` | Nginx | — | — |
+| `631/tcp` | `0.0.0.0` | CUPS | — | — |
+| `1080/tcp` | `10.0.1.5` | MicroSOCKS | — | — |
+| `5432/tcp` | `0.0.0.0` | Flowxify Postgres | `flowxify-postgres` → `5432` | `flowxify_backend` (172.20.0.3) |
+| `8000/tcp` | `0.0.0.0` | Flowxify FastAPI GW | `flowxify-fastapi-gateway` → `8000` | `flowxify_backend` (172.20.0.8) |
+| `8080/tcp` | `0.0.0.0` | Flowxify Activepieces | `flowxify-activepieces` → `80` | `flowxify_backend` (172.20.0.5) |
+| `8081/tcp` | `0.0.0.0` | Flowxify Nginx | `flowxify-nginx` → `80` | `flowxify_backend` (172.20.0.9) |
+| `8443/tcp` | `0.0.0.0` | Flowxify Nginx TLS | `flowxify-nginx` → `443` | `flowxify_backend` (172.20.0.9) |
+| `9050/tcp` | `127.0.0.1` | Tor SOCKS | — | — |
+
+---
+
+## G. PROXMOX HOSTS (Fără Docker)
+
+### G1. hz.118 — `95.216.72.118` / `10.0.1.4`
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH |
+| `25/tcp` | `0.0.0.0` | Postfix |
+| `85/tcp` | `127.0.0.1` | PVE Daemon |
+| `111/tcp` | `0.0.0.0` | RPC |
+| `1080/tcp` | `10.0.1.4` | MicroSOCKS (Tier 1) |
+| `1081/tcp` | `10.0.1.4` | MicroSOCKS (Tier 2 — spare subnet) |
+| `3128/tcp` | `*` | SpiceProxy |
+| `8006/tcp` | `*` | Proxmox WebUI |
+
+### G2. hz.157 — `95.216.225.157` / `10.0.1.3`
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp`, `25/tcp`, `85/tcp`, `111/tcp` | standard | SSH, Postfix, PVE, RPC |
+| `1080/tcp` | `10.0.1.3` | MicroSOCKS |
+| `3128/tcp`, `8006/tcp` | `*` | SpiceProxy, Proxmox WebUI |
+
+### G3. hz.215 — `95.216.36.215` / `10.0.1.9`
+
+| Port | Bind | Serviciu | Notă |
+|---|---|---|---|
+| `22/tcp`, `25/tcp`, `85/tcp`, `111/tcp` | standard | SSH, Postfix, PVE, RPC | |
+| `1080/tcp` | `10.0.1.9` | MicroSOCKS | |
+| `3128/tcp`, `8006/tcp` | `*` | SpiceProxy, Proxmox WebUI | |
+| `8888/tcp` | `10.0.1.9` | TinyProxy | Forward proxy pt containere |
+| `9100/tcp` | `*` | Node Exporter | |
+
+### G4. hz.223 — `95.217.32.223` / `10.0.1.8`
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp`, `25/tcp`, `85/tcp`, `111/tcp` | standard | SSH, Postfix, PVE, RPC |
+| `1080/tcp` | `10.0.1.8` | MicroSOCKS |
+| `3128/tcp`, `8006/tcp` | `*` | SpiceProxy, Proxmox WebUI |
+| `9100/tcp` | `*` | Node Exporter |
+
+### G5. hz.247 — `95.216.68.247` / `10.0.1.7`
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp`, `25/tcp`, `85/tcp`, `111/tcp` | standard | SSH, Postfix, PVE, RPC |
+| `1080/tcp` | `10.0.1.7` | MicroSOCKS |
+| `3128/tcp`, `8006/tcp` | `*` | SpiceProxy, Proxmox WebUI |
+| `9100/tcp` | `*` | Node Exporter |
+| `443` → `49112` | `10.0.1.10` | HAProxy VIP (vezi secțiunea B) |
+
+---
+
+## H. LXC CONTAINERS — PORT MAP
+
+### H1. lxc-wapp-pro-app (`10.0.1.105`)
+
+| Port | Bind | Serviciu | Container → Internal |
+|---|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH | — |
+| `6479/tcp` | `0.0.0.0` | socat (Redis proxy?) | — |
+| `9100/tcp` | `*` | Prometheus Node Exporter | — |
+| `26000/tcp` | `10.0.1.105` | Evolution API | `evo-wapp-core` → `7780` |
+| `33921/tcp` | `*` | Promtail | — |
+
+### H2. lxc-neanelu-prod (`10.0.1.111`)
+
+| Port | Bind | Serviciu | Container → Internal |
+|---|---|---|---|
+| `22/tcp` | `*` | SSH | — |
+| `6432/tcp` | `127.0.0.1` | PgBouncer | `neanelu-pgbouncer` → `6432` |
+| `9100/tcp` | `*` | Node Exporter | — |
+| `65000/tcp` | `0.0.0.0` | Neanelu Backend Worker | `neanelu-backend-worker` → `65000` |
+| `65001/tcp` | `0.0.0.0` | Neanelu Web Admin | `neanelu-web-admin` → `65001` |
+| `65210/tcp` | `0.0.0.0` | Cadvisor | `neanelu-cadvisor` → `8080` |
+| `65211/tcp` | `0.0.0.0` | PgBouncer Exporter | `neanelu-pgbouncer-exporter` → `9127` |
+
+### H3. lxc-neanelu-staging (`10.0.1.112`) — Identic cu prod
+
+Porturi identice: `65000`, `65001`, `65210`, `65211`, `6432`, `9100`, `22`.
+
+### H4. lxc-prod-cerniq (`10.0.1.109`)
+
+| Port | Bind | Serviciu | Container → Internal |
+|---|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH | — |
+| `9100/tcp` | `*` | Node Exporter | — |
+| `64000/tcp` | `0.0.0.0` | Cerniq Web (host net placeholder) | `cerniq-placeholder-web` → host |
+| `64010/tcp` | `0.0.0.0` | Cerniq API (host net placeholder) | `cerniq-placeholder-api` → host |
+| `64012/tcp` | `0.0.0.0` | Cerniq Admin (host net placeholder) | `cerniq-placeholder-admin` → host |
+| `64094/tcp` | `0.0.0.0` | Cadvisor | `cerniq-cadvisor` → `8080` |
+| `64095/tcp` | `0.0.0.0` | PgBouncer Exporter | `cerniq-pgbouncer-exporter` → `9127` |
+
+### H5. lxc-staging-cerniq (`10.0.1.110`)
+
+| Port | Bind | Serviciu | Container → Internal |
+|---|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH | — |
+| `9100/tcp` | `*` | Node Exporter | — |
+| `64000/tcp` | `0.0.0.0` | Cerniq Web | `cerniq-web` → `64000` |
+| `64010/tcp` | `0.0.0.0` | Cerniq API | `cerniq-api` → `64010` |
+| `64012/tcp` | `0.0.0.0` | Cerniq Admin | `cerniq-admin` → `64012` |
+| `64080/tcp` | `0.0.0.0` | Cerniq Monitoring API | `cerniq-monitoring-api` → `64080` |
+| `64094/tcp` | `0.0.0.0` | Cadvisor | `cerniq-cadvisor` → `8080` |
+| `64095/tcp` | `0.0.0.0` | PgBouncer Exporter | `cerniq-pgbouncer-exporter` → `9127` |
+
+### H6. lxc-llm-guard (`10.0.1.115`)
+
+| Port | Bind | Serviciu | Container → Internal |
+|---|---|---|---|
+| `22/tcp` | `*` | SSH | — |
+| `8000/tcp` | `0.0.0.0` | LLM Guardrails | `llm-guard` → `8000` |
+| `9100/tcp` | `*` | Node Exporter | — |
+
+### H7. lxc-ci-worker (`10.0.1.108`)
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp` | `0.0.0.0` | SSH |
+| `9100/tcp` | `*` | Node Exporter |
+
+Docker instalat dar fără containere active.
+
+### H8. lxc-postgres-main (`10.0.1.107`)
+
+| Port | Bind | Serviciu | Notă |
+|---|---|---|---|
+| `22/tcp` | `*` | SSH | |
+| `2322/tcp` | `127.0.0.1` | SSH Tunnel | Tunel intern |
+| `5432/tcp` | `0.0.0.0` | PostgreSQL 16 | **DB principal cluster** |
+| `9100/tcp` | `*` | Node Exporter | |
+| `9187/tcp` | `*` | Postgres Exporter | Prometheus metrics |
+
+---
+
+## I. hz.118 LXC PUBLIC CONTAINERS
+
+### I1. hz.118.lxc.100 (`95.216.72.100`) — server.traktors.ro (Plesk)
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `21/tcp` | `*` | FTP (xinetd) |
+| `25/tcp` | `0.0.0.0` | Postfix SMTP |
+| `80/tcp` | `95.216.72.100` | Nginx HTTP |
+| `106/tcp` | `*` | POP3 Proxy (xinetd) |
+| `110/tcp` | `0.0.0.0` | Dovecot POP3 |
+| `143/tcp` | `0.0.0.0` | Dovecot IMAP |
+| `443/tcp` | `95.216.72.100` | Nginx HTTPS |
+| `465/tcp` | `0.0.0.0` | Postfix SMTPS |
+| `993/tcp` | `0.0.0.0` | Dovecot IMAPS |
+| `995/tcp` | `0.0.0.0` | Dovecot POP3S |
+| `1321/tcp` | `0.0.0.0` | SSH (non-standard!) |
+| `3306/tcp` | `127.0.0.1` | MySQL |
+| `4190/tcp` | `0.0.0.0` | Dovecot Sieve |
+| `7080/tcp` | `127.0.0.1` | Apache (backend) |
+| `7081/tcp` | `127.0.0.1` | Apache (backend) |
+| `8443/tcp` | `0.0.0.0` | Plesk Control Panel |
+| `8880/tcp` | `0.0.0.0` | Plesk Webmail |
+
+### I2. hz.118.lxc.101 (`95.216.125.170`) — tecdocnode
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp` | `*` | SSH |
+| `80/tcp` | `0.0.0.0` | Nginx |
+| `443/tcp` | `0.0.0.0` | Nginx |
+| `6379/tcp` | `127.0.0.1` | Redis (local) |
+| `18003/tcp` | `127.0.0.1` | New Relic |
+
+### I3. hz.118.lxc.102 (`95.216.125.171`) — tecdocmysql
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp` | `*` | SSH |
+| `3306/tcp` | `0.0.0.0` | MariaDB |
+| `5432/tcp` | `0.0.0.0` | PostgreSQL |
+
+### I4. hz.118.lxc.103 (`95.216.125.172`) — mediserver2
+
+| Port | Bind | Serviciu |
+|---|---|---|
+| `22/tcp` | `*` | SSH |
+| `80/tcp` | `0.0.0.0` | Nginx |
+| `443/tcp` | `0.0.0.0` | Nginx |
+
+---
+
+## J. PORT CONVENTION SCHEMA
+
+Din auditul tuturor mașinilor, am identificat conventions clare de alocare:
+
+| Range | Owner | Descriere |
+|---|---|---|
+| `1080-1081` | MicroSOCKS | SOCKS5 proxy pe fiecare nod |
+| `8006` | Proxmox | WebUI pe toate hypervisorii |
+| `3128` | SpiceProxy | Console pe hypervisori |
+| `9100` | node-exporter | Pe TOATE mașinile |
+| `9835` | nvidia-gpu-exporter | Doar pe GPU nodes (hz.62, hz.113) |
+| `19xxx` | HAProxy VIP (staging) | Neanelu=19200-19251, Cerniq=19000-19100 |
+| `26xxx` | HAProxy VIP (WAPP) | App=26010-26013, SOCKS5=26100-26110 |
+| `29xxx` | HAProxy VIP (prod) | Neanelu=29200-29251, Cerniq=29000-29100 |
+| `39xxx` | HAProxy VIP (dev) | Neanelu dev=39200-39251 |
+| `49xxx` | HAProxy VIP (LLM) | AI=49000-49004, Monitoring=49110-49112 |
+| `55433` | Migration | Postgres temp (hz.164) |
+| `64xxx` | Cerniq App | Web=64000, API=64010, Admin=64012, Monitoring=64080, Cadvisor=64094, PgBouncer=64095 |
+| `65xxx` | Neanelu App | API=65000, Admin=65001, Dev API=65100, Dev Admin=65101, Cadvisor=65210, PgBouncer=65211 |
+
+---
+
+## K. CONFLICTE IDENTIFICATE
+
+### K1. ⚠️ Conflicte de Subnet Docker
+
+| Subnet | Folosit pe | Risc |
+|---|---|---|
+| `172.17.0.0/16` | `bridge` pe **toate** mașinile (orchestrator, hz.62, hz.113, hz.123, hz.164, lxc-ci-worker, lxc-llm-guard, lxc-neanelu-prod, lxc-neanelu-staging, lxc-prod-cerniq, lxc-staging-cerniq, lxc-wapp-pro-app) | **Nu este un conflict funcțional** — fiecare bridge este izolat la nivel de namespace. Este default Docker. |
+| `172.18.0.0/16` | `traefik_default` (orchestrator), `ai-infrastructure_default` (hz.113), `ai-infrastructure-embed_default` (hz.62), `neanelu_default` (lxc-neanelu-prod, lxc-neanelu-staging), `neanelu_default` (hz.123), `ai-guardrails_default` (lxc-llm-guard), `evolution-wapp_wapp-internal` (lxc-wapp-pro-app) | **Subnet identic, namespace diferit.** Fiecare mașină are propriul bridge `172.18.0.0/16`. Nu este un conflict la nivel de rețea dacă mașinile nu rutează trafic Docker cross-host. |
+| `172.19.0.0/16` | `observability` (orchestrator), `monitoring_default` (hz.62, hz.113) | **Idem, izolat per host.** |
+| `172.29.x.0/24` | `cerniq_*` pe `lxc-prod-cerniq`, `lxc-staging-cerniq`, `neanelu_default` pe `hz.164` | **Overlap potențial:** `neanelu_default` pe hz.164 = `172.29.0.0/24`, iar `cerniq_public` pe lxc-prod/staging = `172.29.10.0/24`. Nu se suprapun (sunt /24 diferite), dar sunt **în aceeași clasă**. |
+
+### K2. ⚠️ Porturi potențial confuze (nu conflicte tehnice)
+
+| Port | Mașină 1 | Mașină 2 | Risc |
+|---|---|---|---|
+| `8080` | Zitadel (orchestrator, host) | Cadvisor (hz.113, 10.0.1.13) | **Nu este conflict** — bind pe IP-uri diferite. Dar Zitadel este **deprecated**! |
+| `5432` | `lxc-postgres-main` (bind `0.0.0.0`) | `flowxify-postgres` pe hz.123 (bind `0.0.0.0`) | **Ambele ascultă pe 5432** dar pe mașini diferite. Atenție la confusion de connection strings. |
+| `6379` | Redis orchestrator (`10.0.0.2:6379`) | Redis local hz.164 (`127.0.0.1:6379`) + Redis local hz.118.lxc.101 (`127.0.0.1:6379`) | **Nu este conflict** — bind pe adrese diferite. Redis shared este DOAR pe orchestrator. |
+
+### K3. ✅ Zero conflicte de port funcționale reale
+
+**NU există niciun conflict de port la nivel de mașină.** Toate porturile de pe fiecare mașină sunt unice pe bind address-ul respectiv. Convențiile de range (19xxx, 29xxx, 39xxx, 49xxx, 64xxx, 65xxx) sunt respectate complet fără suprapuneri.
+
+---
+
+## L. DIRECTIVE PENTRU AGENȚI
+
+1. **Alocarea de porturi noi:** Folosește range-urile definite în secțiunea J. Pentru un proiect NOU, alege un range liber (ex: `66xxx`). Nu refolosi porturile existente.
+2. **HAProxy VIP:** Orice serviciu nou care trebuie accesat de pe orchestrator prin vSwitch TREBUIE adăugat în HAProxy config pe hz.247 (`/etc/haproxy/haproxy.cfg`).
+3. **Connection strings Redis:** Din containere Neanelu/Cerniq, Redis este la `10.0.1.10:6379` (VIP). Din servicii pe orchestrator, Redis este la `10.0.0.2:6379` (direct).
+4. **PostgreSQL:** Baza de date principală este pe `lxc-postgres-main` (`10.0.1.107:5432`). Connection-ul se face prin PgBouncer (port `5432` intern Docker) sau Traefik TCP Router (orchestrator `*:5432`).
+5. **Zitadel** pe port `8080` este **DEPRECATED**. Nu îl mai folosi. Va fi eliminat.
+6. **SOCKS5 mesh** (porturile `26100-26110`) este dedicat exclusiv WAPP Pro App. Nu-l folosi pentru alte proiecte.

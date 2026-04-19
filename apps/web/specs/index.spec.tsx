@@ -1,16 +1,14 @@
-/// <reference path="./jest-runtime-globals.d.ts" />
+import './jest-runtime-globals';
 import { describe, expect, it } from '@jest/globals';
 import React from 'react';
 import { render } from '@testing-library/react';
-import Page from '../app/page';
+import { BrainCanvas } from '../components/brain/brain-canvas';
 
-jest.mock('../components/brain-status-panel', () => ({
-  BrainStatusPanel: () => <div data-testid="cerniq-brain-status-mock" />,
-}));
-
-describe('Page', () => {
+describe('BrainCanvas', () => {
   it('should render successfully', () => {
-    const { baseElement } = render(<Page />);
+    const { baseElement } = render(
+      <BrainCanvas gatewayLabel="g" neuronLabel="n" synapseLabel="s" />
+    );
     expect(baseElement).toBeTruthy();
   });
 });

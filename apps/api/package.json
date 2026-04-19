@@ -108,9 +108,15 @@
   },
   "dependencies": {
     "@cerniq/gateway-hello": "workspace:*",
+    "@cerniq/llm": "workspace:*",
+    "@cerniq/messaging": "workspace:*",
+    "@fastify/autoload": "^6.3.1",
+    "@fastify/sensible": "^6.0.4",
+    "@temporalio/client": "^1.16.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "fastify": "^5.8.5",
     "fastify-plugin": "^5.1.0",
-    "@fastify/autoload": "^6.3.1",
-    "@fastify/sensible": "^6.0.4"
+    "jsonwebtoken": "^9.0.3",
+    "prom-client": "^15.1.3"
   }
 }

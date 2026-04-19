@@ -1,0 +1,60 @@
+---
+alwaysApply: true
+globs: "**/*"
+description: /opt/stacks — audit mașini & cluster. Oglindire .cursorrules/03-infrastructure.md
+---
+
+> **Sursă canonică (editare):** `.cursorrules/03-infrastructure.md` — păstrează aceste două locații aliniate dacă editezi manual.
+
+# 03. INFRASTRUCTURE & MACHINES AUDIT (BASED ON REAL SSH AUDIT DATA)
+
+> **MANDATORY POLICY:** În conformitate cu politica "Zero Presupuneri", acest fișier reflectă starea REALA și performanțele fizice ale mașinilor din cluster, auditate secvențial. Agentului îi este interzis să încarce mașini cu mai multe sarcini decât permite performanța lor fizică dovedită, și este obligat să își ruteze workload-ul masiv către containerele desemnate.
+
+## PREZENTAREA CLUSTERULUI HETZNER & LXC (TOPOLOGIE EXTRASĂ LIVE)
+
+Orchestratorul (77.42.76.185) dirijează un cluster de o putere imensă. Alocarea microserviciilor de acum înainte se va raporta strict la limitele fizice listate aici:
+
+### 1. The Heavyweight Bare-Metal Pool (Host-urile Părinte)
+Resursele brute masive, folosite cel mai des ca hipervizoare (Proxmox nodes) ce pot susține containere noi:
+- **`hz.113`**: MAȘINA SUPREMĂ. 48 Cores / **251 GiB RAM** / 1.7 TB Disk. Dacă agentul propune un microserviciu In-Memory gigantic (ex. o bază graph enormă), acesta este host-ul țintă implicit pentru provizionare.
+- **`hz.164`**: MONSTRUL DE PROCESARE. **64 Cores** / 125 GiB RAM / 875 GB Disk. Perfect pentru compilare distribuită.
+- **`hz.247`**: 48 Cores / **188 GiB RAM** / 878 GB Disk. (Găzduiește `lxc-postgres-main`).
+- **Nodurile de bază (48 Cores / 125 GiB RAM)**: `hz.118`, `hz.215`, `hz.223`. Putere de calcul imensă, echilibrată.
+- Noduri izolate / mai mici: `hz.62` (8 Cores/62GB), `hz.123` (8 Cores/62GB), `hz.157` (16 Cores/62GB).
+
+### 2. Zona de Baze de Date Master (Data Layer)
+- **`lxc-postgres-main` (Satelit prin hz.247)**:
+  **Metrici Măsurate:** 12 Cores / 32 GiB RAM / 216 GB Disk.
+  **Regulă:** ACESTA este adevăratul DB Master din arhitectură. Microserviciile noi care stochează volume masive de date relaționale vor fi configurate să se conecteze la acest Postgres. Este suficient de capabil pentru query-uri paralele grele.
+
+### 3. Zona de Inteligență Artificială (LLM)
+- **`lxc-llm-guard` (Satelit prin hz.215)**:
+  **Metrici Măsurate:** 6 Cores / 13 GiB RAM / 49 GB Disk.
+  **Regulă:** Deoarece rulează pe resurse subțiri/calculate (13 GB Memorie RAM), evită scrierea de cod pe acest nod care să ceară load-uri de modele LLM integrale (de ex. rulează pe un Llama de 70B care ar crapa). Această mașină funcționează ca un Guard/Middleware de filtrare IA, nu ca un host de inferență mare.
+
+### 4. Zona CI/CD & Execuție Asincronă
+- **`lxc-ci-worker` (Satelit prin hz.223)**:
+  **Metrici Măsurate:** 12 Cores / 8 GiB RAM / 40 GB Disk.
+  **Regulă:** O mașină orientată spre putere de calcul pe fir lung (12 core-uri), dar **EXTREM DE LIMITATĂ la memorie (8 GiB)**. Nu trimite job-uri Java Gradle care mănâncă 16GB RAM heap. Pipeline-urile trebuie scrise eficient pe memorie când sunt adresate acestui worker.
+
+### 5. Containerele de Proiecte Specifice
+Aceste resurse sunt dedicate și exclusiv limitate pentru proiectele lor. Agentul NU va atinge sau instala alte utilități aici:
+- **Cerniq Project (via hz.223)**
+  - `lxc-prod-cerniq`: 8 Cores / 32 GiB RAM / 99 GB Disk.
+  - `lxc-staging-cerniq`: 4 Cores / 16 GiB RAM (resurse tăiate fix la jumătate vs PROD - rule of thumb respectat).
+- **Neanelu & Wapp-Pro (via hz.215)**
+  - `lxc-neanelu-prod`: 8 Cores / 32 GiB RAM / 98 GB Disk.
+  - `lxc-neanelu-staging`: 8 Cores / 32 GiB RAM / 79 GB Disk.
+  - `lxc-wapp-pro-app`: 4 Cores / 10 GiB RAM / 50 GB Disk.
+- **Traktors & TecDoc (via hz.118 standalone)**
+  - `hz.118.lxc.100` (`server.traktors.ro`): 4 Cores / 16 GiB RAM / Un disk uriaș de 885 GB.
+  - `hz.118.lxc.102` (`tecdocmysql`): 16 Cores / 32 GiB RAM / 393 GB Disk. Acest MySQL este "Hrănit" puternic fiind baza TecDoc uriașă.
+  - `hz.118.lxc.103` (`mediserver2`): 16 Cores / 32 GiB RAM / 393 GB Disk.
+  - `hz.118.lxc.101` (`tecdocnode`): 2 Cores / 4 GiB RAM (app layer foarte lightweight).
+
+---
+## CUM TREBUIE APLICATĂ ACEASTĂ REGULĂ DE CĂTRE AGENȚI:
+Oricând ți se citește acest fișier, gândește-te: 
+1. *"Fac upload la un API care analizează binar video?"* -> Nu îl pot pune pe `orchestrator`, dar `hz.164` m-ar putea găzdui cu 64 Cores.
+2. *"Scriu un pipeline ci/cd?"* -> Atenție la Worker că are doar 8 GiB RAM! Nu pot folosi build-uri care cer V8 heap uluitor.
+3. *"Conectez Prisma ORM la Postgres?"* -> Îl rutez spre `lxc-postgres-main` la distanță sau local dacă suntem în mediu redus? Spre master, care are 32GiB RAM pregătiți.

@@ -1,0 +1,14 @@
+{
+  "name": "temporal-worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@temporalio/worker": "^1.16.0",
+    "@temporalio/workflow": "^1.16.0"
+  }
+}

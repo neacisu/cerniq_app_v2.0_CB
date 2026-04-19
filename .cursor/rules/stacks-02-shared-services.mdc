@@ -1,0 +1,41 @@
+---
+alwaysApply: true
+globs: "**/*"
+description: /opt/stacks — servicii orchestrator shared. Oglindire .cursorrules/02-shared-services.md
+---
+
+> **Sursă canonică (editare):** `.cursorrules/02-shared-services.md` — păstrează aceste două locații aliniate dacă editezi manual.
+
+# SHARED ORCHESTRATOR SERVICES (OBLIGATORIU)
+
+> **DIRECTIVĂ ABSOLUTĂ**: Serverul local rulează ca un orchestrator centralizat de tip cluster intern (posibil sub Proxmox cu infrastructură extinsă Docker). Se EXCLUDE complet provizionarea de servicii duplicat (tip *sidecar data-stores*) pe proiect. Nu adăuga `postgres`, `redis`, `mail-server` sau alte utilități de backend izolate pe proiect în noile `docker-compose`-uri decât dacă este solicitat expres și argumentat puternic.
+
+## Servicii Centrale Disponibile (Hardware/Software Shared)
+În urma auditării meticuloase a mașinii (`ss -tuln`, `docker ps`), agentul a identificat ecosistemul curent de master-nodes ce trebuie integrate cu aplicațiile satelit (GeniusERP, GeniusSuite, internalcmdb etc). Toate dezvoltările viitoare se adaptează acestor tehnologii:
+
+### 1. Reverse Proxy & Traffic Ingress: **Traefik**
+- **Regulă:** Evită expunerea directă a porturilor (nu se acceptă directive `ports: ["8080:80"]` în compose-uri de frontend/backend web web facing).
+- Aplicațiile vor fi orchestrate plasând etichete adecvate de *Traefik Labels* (ex. `traefik.enable=true`, `traefik.http.routers.app.rule=Host(...)`) și înrolate în rețeaua de bridge potrivită în care se află proxy-ul.
+
+### 2. Identity and Access Management (Auth Modules)
+- **Regulă:** Fiecare proiect (GeniusERP, GeniusSuite, etc.) **își va defini propriul modul de Auth/IAM**. 
+- **Zitadel este DEPRECATED** pentru infrastructura noastră și a fost marcat ca fiind greu de folosit. Agenții **sunt obligați să ignore** orice referință la instanța Zitadel și să scrie/implementeze sisteme de înregistrare/autentificare complet dedicate (User, Bcrypt, JWT/Sessions, etc.), în interiorul bazei de cod a fiecărui proiect.
+
+### 3. Management de Secrete & Configurații: **OpenBao (Hashicorp Vault fork)**
+- **Regulă:** Orice aplicație masivă nouă din `/opt/stacks/` care operează secrete, certificate, API keys și date protejate de regulamente va accesa serviciul pe pilonul `openbao:2.5.0` (port 8201 / local config). Limitează propagarea hardcoded în `.env`-uri statice în favoarea injectării în memorie (ex. *agent-config.hcl*).
+
+### 4. Caché, Memorii Volatile & Message Broker: **Redis (redis-shared)**
+- **Regulă:** Orice necesitate de pub/sub socket, task queue (BullMQ/Celery) sau caching (ex. API Cache) va face point obgligatoriu din URL către instanța `redis-shared` deja provisionată (redis 8.6.0). 
+
+### 5. PostgreSQL & DB Management: **Postgres 17 + CloudBeaver**
+- **Regulă:** Relational Database Management-ul se duce pe baza de date centralizată PostgreSQL existentă (pe port intern `5433/5432`), eventual pe user/bază izolată pentru proiect. Interacțiunea umană sau vizualizările se gestionează via `cloudbeaver-cloudbeaver-1`. 
+
+### 6. Email Delivery & Receiving: **Stalwart Mail Server**
+- **Regulă:** Componentele care necesită notificări, rapoarte sau flux SMTP (Mailing) trebuie direcționate spre nodurile interne de email (Stalwart pe porturile SMTP clasice instalate /25/465/587). Nu adăuga alte containere tip *mailer* sau conturi externe third-party care adaugă latency.
+
+### 7. Observabilitate, Telemertie & Logs: **Prometheus / Tempo / Vector Stack**
+- **Regulă Logs:** Fără sisteme de logging descentralizate fanteziste. Există instanța `vector` ce funcționează ca agregator. Outputul din std::out/err trebuie formatat JSON pentru a fi parsat rațional.
+- **Regulă Metrics/Tracing:** Spațiul deja conține exporters de prometheus și instanță `Tempo`. Orice micro-serviciu creat trebuie să fie instrumentabil (expunere port de telemetrie sau endpoint `/metrics`).
+
+--- 
+**Mod De Execuție**: Oricând concepi o implementare (ex. ai nevoie de o rată limită - rate-limit pe un endpoint în GeniusERP), creierul tău tehnic va formula intern decizia: *"Voi implementa acest rate-limit conectând microserviciul la containerul `redis-shared` local și rutând accesul via `Traefik`"* și **NU** *"Voi instala aici un container cache separat".*

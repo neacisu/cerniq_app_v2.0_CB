@@ -1,0 +1,41 @@
+---
+alwaysApply: true
+globs: "**/*"
+description: /opt/stacks — reguli obligatorii 01 (general setup). Oglindire .cursorrules/01-general-setup.md
+---
+
+> **Sursă canonică (editare):** `.cursorrules/01-general-setup.md` — păstrează aceste două locații aliniate dacă editezi manual.
+
+# CORE DIRECTIVES & GENERAL SETUP
+
+> **MANDATORY POLICY FOR ALL AI AGENTS**: Aceste reguli reprezintă nucleul sistemului. Orice agent de asistență IA (inclusiv instanțele Antigravity sau altele) are OBLIGAȚIA să preia, să integreze și să judece exigent acțiunile sale conform acestui protocol. Nerespectarea atrage după sine respingerea totală a soluției.
+
+## 1. Zero Presupuneri & Contextualizare Exclusiv Bazată pe Realitate (Anti-Hallucination Policy)
+- **Fără invenții:** Este strict și categoric interzisă deducția (ghicirea) numelor de fișiere, variabile, metode, constante, convenții de nume sau a funcționalităților fără o dovadă concretă. 
+- **Auditare reală a contextului:** Nicio decizie abstractă nu se mută în implementare înainte de a mapa realitatea codului. Nu modifica și nu importa module până nu ai lansat comenzi specifice (precum `grep_search`, `list_dir`, `view_file` sau `tree`) pentru a valida ce există fizic în proiect.
+- **Validarea existenței reale:** Dacă nu ești complet sigur de starea mediului, **OPREȘTE-TE**. Lansează interogări specifice. Ești obligat să folosești informații fundamentate pe date reale locale sau din documentații valide.
+
+## 2. Raționament Cognitiv-Rațional Aprofundat & Analiza Scenariilor Complexe
+- **Nu acționa robotic:** Orice funcție, integrare sau implementare va decurge obligatoriu dintr-un proces de raționament conștient: *Scop -> Context -> Edge Cases -> Implementare*.
+- **Planificare pe toate planurile:** Când propui sau editezi un modul, răspunsul și codul trebuie să reflecte că te-ai gândit la: 
+  - Toate ramurile de execuție, inclusiv condițiile de eșec și lipsa de date (Graceful Degradation).
+  - Gestionarea erorilor (Error Handling vizibil / asincron / decuplat - conform arhitecturilor enterprise).
+  - Efectul de domino în cadrul monorepo-ului/aplicației. Nu "adăuga" dacă adăugarea strică principiul asincronismului sau cuplează prea puternic ceva ce trebuie să rămână curat (Loose Coupling).
+
+## 3. Interdicția Implementărilor Minimale (Complete & Enterprise-Grade Only)
+- **Respinge MVP-urile tehnice (Minimum Viable Products):** Orice scrii trebuie să fie complex, detaliat și direct compatibil cu cele mai înalte standarde Enterprise. Nu rezolva sarcina "doar ca să meargă". 
+- **Nu lăsa cod de tip "TODO", Mocks, sau funcții ciuntite.** Fiecare unitate pusă în codebase trebuie să fie complet integrată, având tipări stricte (TypeScript/etc.), interfețe blindate și logică end-to-end completată.
+- **Documentare Analitică Arhitecturală:** Codul livrat **va conține referințe extinse**. Adaugă JSDoc/comentarii elaborate în cod, explicând clar *Motivele Deciziei*, *Fundamentul Tehnic* pentru alegerea metodei, și mai ales *Gândirea* din spatele designului structurii. (De ce așa și nu altfel - care sunt edge-case-urile prevenite).
+
+## 4. Tehnologii "State Of The Art" (Referință: Aprilie 2026) 
+- Agentul va integra obligatoriu pachete, module și concepte de sistem la cele mai noi și stabile versiuni verificate anterior în piață vizavi de context ("cel puțin Latest as of April 2026"). 
+- Soluțiile `legacy`, depreciate, abandonate de o comunitate activă sunt excluse violent din orice plan de implementare, independent de popularitatea lor din trecut. Funcționalitățile vechi ignoră progresul tehnologic - folosește noutățile, adaptându-le sigur și complet.
+
+## 5. Prerogativul Open-Source Self-Hosted & Infrastructură Locală
+- **Dă prioritate soluțiilor Self-Hosted** contra componentelor SaaS reținute de third-party (Software as a Service depinzând de acces network extern/API keys de plată).
+- Folosește pe scară largă componente și pachete robuste provenite din fondul Global Open-Source cu licențiere liberă.
+- Când implementezi componente și aplicații, ai OBLIGAȚIA să favorizezi și să refolosești **serviciile orchestratorului shared** din rețeaua/mașina locală (ex. shared databases, API gateways, cache mechanisms, proxy engines), pentru a asigura un design integrat al sistemului /opt/stacks.
+
+## 6. Depășirea Standardului & Inovația Responsabilă
+- Fii sclipitor, vizionar. Depășește standardele comune pe care agenții tipici le oferă. Dacă observi că poți abstra o problemă cu un tipar de arhitectură elegant sau un algoritm asimptotic mult superior (O(1), O(log N)), propune implementarea "genius".
+- Dar: "Viziunea" nu te scutește niciodată de regulile anterioare: orice inovație trebuie creată folosind componente REALE, limitată în halucinații și demonstrabilă cognitiv pas-cu-pas. Fundamentează inovația cu informație concretă.

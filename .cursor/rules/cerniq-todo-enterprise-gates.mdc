@@ -1,0 +1,46 @@
+---
+alwaysApply: true
+globs: "**/*"
+description: Cerniq v2 — interzice „completed” fals; DoD + quality gate per todo; aliniere exclusivă stacks-01…05 din acest repo.
+---
+
+# Cerniq v2 — enforcement todo-uri și quality gates (enterprise)
+
+## Autoritate reguli
+
+- Regulile **stacks-01…05** din **acest folder** (`cerniq_app_v2_CB/.cursor/rules/`) sunt **obligatorii** pentru orice lucru în monorepo.
+- Nu folosi reguli din alte workspace-uri ca sursă primară; dacă există duplicat în `/opt/stacks/.cursor/rules`, **versiunea din proiect** prevalează pentru PR-uri Cerniq.
+
+## Interdicții (stacks-01 + acest fișier)
+
+1. **Fără implementări minimale** mascate ca „done”: stub-uri, TODO în fluxuri critice (auth, tenant, plată date, izolare), sau „document există fără AC verificat”.
+2. **Fără `status: completed` la todo** (în plan / tracking) fără:
+   - cod + teste relevante **sau**
+   - dovadă operațională în runbook (pentru Cloudflare/Traefik/CMDB) **sau**
+   - ADR **Excluded** / **Deferred** cu criterii măsurabile și owner.
+3. **Fără presupuneri** pe hosturi, IP, porturi, versiuni engine: verificare stacks-01 sau CMDB citat în `docs/compliance-stacks-01-05.md`.
+
+## Quality gate minim înainte de a marca un todo „completed”
+
+Rulează din rădăcina monorepo `cerniq_app_v2_CB/`:
+
+```bash
+python3 tools/ci/run_gates.py
+pnpm exec nx run-many -t lint,typecheck,test --all
+pnpm exec nx run-many -t build --projects=api,web
+```
+
+Dacă todo-ul atinge UI publicat: `pnpm --filter web exec storybook build` și `pnpm exec nx run web-e2e:e2e` când e cazul.
+
+## Checklist Definition of Done (per tip todo)
+
+| Tip | Înainte de completed |
+|-----|----------------------|
+| **Cod / API / UI** | Teste automate trec; fără PII în loguri client; contracte aliniate OpenAPI unde există. |
+| **Doc enterprise** | Rând în `docs/compliance-stacks-01-05.md` sau ADR cu trimitere stacks S0x; fără contradicții cu blueprint/research fără mitigare. |
+| **Infra edge (DNS, TLS, Traefik)** | Dovadă în `docs/runbooks/` sau ADR: comenzi rulate, ID înregistrări, config aplicat pe orchestrator — nu doar fișier exemplu în repo. |
+| **Gates CI** | `run_gates.py` verde; la extindere gate nou, documentat în `tools/ci/run_gates.py`. |
+
+## Sincronizare cu planul Cursor
+
+La închiderea unui todo din planul unificat: actualizează în frontmatter **`status`** + **`reason`** (motiv scurt) — nu șterge `reason` la resetări ulterioare fără revizuire explicită.

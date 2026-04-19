@@ -1,0 +1,473 @@
+---
+alwaysApply: true
+globs: "**/*"
+description: /opt/stacks — topologie rețea, IP, firewall. Oglindire .cursorrules/04-internal-external-network-ips.md
+---
+
+> **Sursă canonică (editare):** `.cursorrules/04-internal-external-network-ips.md` — păstrează aceste două locații aliniate dacă editezi manual.
+
+# 04. NETWORK TOPOLOGY, IPS, FIREWALL & DOCKER NETWORKS (EXHAUSTIVE REAL AUDIT)
+
+> **Sursa datelor:** `iptables-save`, `ip -4 addr show`, `ip route show`, `ufw status verbose`, `docker network inspect` executate live prin SSH pe **toate cele 20 de mașini** din infrastructură la data de 2026-04-18. Zero presupuneri, zero date inventate.
+
+---
+
+## A. ORCHESTRATOR (Mașina curentă de lucru)
+
+| Parametru | Valoare reală |
+|---|---|
+| **SSH Alias** | `orchestrator` |
+| **IPv4 Public** | `77.42.76.185/32` pe `enp1s0` |
+| **vSwitch Intern** | `10.0.0.2/32` pe `enp7s0` |
+| **WireGuard VPN** | `10.99.0.1/24` pe `wg-home` |
+| **Gateway Default** | `172.31.1.1` via `enp1s0` |
+| **Rută vSwitch** | `10.0.0.0/16` via `10.0.0.1` dev `enp7s0` (MTU `1450`) |
+| **Rută VPN** | `10.99.0.0/24` + `192.168.100.0/24` via `wg-home` |
+
+**Firewall:** INPUT/OUTPUT ACCEPT (fără UFW). Protecție bazată pe nivel de aplicație (Traefik).
+
+**Docker Networks:**
+| Network Name | Subnet | Driver |
+|---|---|---|
+| `bridge` | `172.17.0.0/16` | bridge |
+| `traefik_default` | `172.18.0.0/16` (`br-220950042a5d`) | bridge |
+| `observability` | `172.19.0.0/16` (`br-9f0a8344ddde`) | bridge |
+| `internalcmdb_net` | `172.21.0.0/16` (`br-424c9f0dd7e2`) | bridge |
+
+**NAT/DNAT Rules critice (din iptables-save):**
+- `redis-shared` expus pe `10.0.0.2:6379` → DNAT `172.17.0.2:6379`
+- `internalcmdb-postgres` expus pe `127.0.0.1:5433` → DNAT `172.21.0.2:5432`
+- `stalwart` (mail): porturi 25, 143, 465, 587, 993, 4190 → DNAT `172.18.0.3`
+- **SNAT special:** Traficul din rețelele Docker (`172.19.0.0/16`, `172.18.0.0/16`) către `10.0.0.0/8` iese cu `SNAT --to-source 10.0.0.2` pe `enp7s0`
+
+---
+
+## B. HETZNER BARE-METAL HOSTS (Proxmox Hypervisors)
+
+### B1. `hz.62` — 95.216.66.62
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `95.216.66.62/32` pe `enp0s31f6` |
+| **vSwitch** | `10.0.1.62/24` pe `vlan4000` |
+| **Gateway** | `95.216.66.1` |
+| **Firewall** | UFW **inactiv**. Iptables: INPUT ACCEPT. Regula specială: `10.0.0.0/8 → dport 1080 ACCEPT` |
+
+Docker Networks: `ai-infrastructure-embed_default` (172.18.0.0/16), `monitoring_default` (172.19.0.0/16)
+
+NAT: `10.0.1.62:8003` → DNAT `172.18.0.2:11434` (Ollama); Port `9180` → DNAT `172.19.0.2:8080`
+
+### B2. `hz.113` — 49.13.97.113 (AI GPU Server)
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `49.13.97.113/32` pe `eno1` |
+| **vSwitch** | `10.0.1.13/24` pe `vlan4000` |
+| **Gateway** | `49.13.97.65` |
+| **Firewall** | UFW **ACTIV** — Default: `deny (incoming)` |
+
+UFW Rules semnificative:
+- `22/tcp` ALLOW (SSH)
+- `3000/tcp` ALLOW din `10.0.1.0/24` (Open WebUI pe vSwitch)
+- `8002/tcp` ALLOW din `10.0.1.0/24` (vLLM Secondary)
+- `8001/tcp` ALLOW din `10.0.1.0/24` (vLLM Primary)
+- `9100` ALLOW din `10.0.1.0/24` (node-exporter)
+- `9835` ALLOW din `10.0.1.0/24` (nvidia-gpu-exporter)
+- `8080` ALLOW din `10.0.1.0/24` (cadvisor)
+- Cluster-mesh: ALLOW de la toate IP-urile publice `hz.*`
+
+Docker Networks: `ai-infrastructure_default` (172.18.0.0/16), `monitoring_default` (172.19.0.0/16)
+
+NAT/DNAT:
+- `10.0.1.13:3000` → DNAT `172.18.0.4:8080`
+- `10.0.1.13:8001` → DNAT `172.18.0.2:8000`
+- `10.0.1.13:8002` → DNAT `172.18.0.3:8000`
+- `10.0.1.13:8080` → DNAT `172.19.0.2:8080`
+
+### B3. `hz.118` — 95.216.72.118 (Proxmox Standalone / Traktors+TecDoc)
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `95.216.72.118/32` pe `vmbr0` |
+| **IPv4 Spare** | `95.216.125.173/32` pe `veth-spare` |
+| **vSwitch** | `10.0.1.4/24` pe `enp98s0f0.4000` |
+| **Gateway** | `95.216.72.65` |
+| **Firewall** | Iptables whitelist cluster-mesh + `8006` (Proxmox UI) + `1080`/`1081` intern |
+
+Fără Docker (mașină Proxmox pură).
+
+### B4. `hz.123` — 94.130.68.123
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `94.130.68.123/32` pe `enp0s31f6` |
+| **vSwitch** | `10.0.1.5/24` pe `enp0s31f6.4000` |
+| **Gateway** | `94.130.68.65` |
+| **Firewall** | INPUT ACCEPT + cluster-mesh whitelist |
+
+Docker Networks: `flowxify_backend` (172.20.0.0/16), `neanelu_default` (172.18.0.0/16)
+
+NAT/DNAT:
+- `:5432` → DNAT `172.20.0.3:5432`
+- `:8080` → DNAT `172.20.0.5:80`
+- `:8081`/`:8443` → DNAT `172.20.0.9:80`/`:443`
+- `:8000` → DNAT `172.20.0.8:8000`
+
+### B5. `hz.157` — 95.216.225.157 (Proxmox)
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `95.216.225.157/32` pe `vmbr0` |
+| **IPv4 Secundar** | `95.216.225.139` (scope link pe `vmbr0`) |
+| **vSwitch** | `10.0.1.3/24` pe `enp27s0.4000` |
+| **Gateway** | `95.216.225.129` |
+| **Firewall** | INPUT ACCEPT + cluster-mesh whitelist |
+
+Fără Docker (mașină Proxmox pură).
+
+### B6. `hz.164` — 135.181.183.164 (64-Core Beast / Cerniq Dev + Neanelu Dev)
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `135.181.183.164/32` pe `enp195s0` |
+| **vSwitch** | `10.0.1.6/24` pe `enp195s0.4000` |
+| **Gateway** | `135.181.183.129` |
+| **Firewall** | UFW **ACTIV** — Default: `deny (incoming)`. **~40 Fail2Ban REJECT rules active** |
+
+UFW Rules semnificative (cele care nu sunt Fail2Ban):
+- `22/tcp`, `80`, `443` ALLOW (public)
+- `5000/tcp`, `5001/tcp`, `5002/tcp` ALLOW (public — registry/API)
+- `64090/tcp` ALLOW doar din `135.181.183.164` (loopback)
+- `9100/tcp`, `65210/tcp` ALLOW din `10.0.1.10` și `10.0.1.7`
+- `64000`, `64010`, `64012`, `64080` ALLOW din `10.0.0.0/16` (Traefik → Vite dev, API dev, Admin dev, Monitoring API dev)
+- Cluster-mesh: ALLOW de la toate IP-urile publice `hz.*`
+
+Docker Networks:
+| Network | Subnet |
+|---|---|
+| `neanelu_default` | `172.29.0.0/24` (`br-70d68324d21d`) |
+| `cerniq-dev_cerniq_backend` | `172.30.20.0/24` (`br-f59cc0beb8c3`) |
+| `cerniq-dev_cerniq_public` | `172.30.10.0/24` (`br-2f96bc916282`) |
+| `cerniq-dev_cerniq_data` | `172.30.30.0/24` (`br-23b486c6efb4`) |
+
+NAT/DNAT (critice):
+- `:55433` → DNAT `172.17.0.2:5432` (Postgres local dev)
+- `:65210` → DNAT `172.29.0.5:8080` (Neanelu Traefik)
+- `:65211` → DNAT `172.29.0.10:9127` (Neanelu Exporter)
+- `127.0.0.1:6432` → DNAT `172.29.0.9:6432` (PgBouncer)
+- `:65100` → DNAT `172.29.0.6:65000` / `:65101` → `172.29.0.8:65001` (Neanelu App/Worker)
+- `:64000` → `172.30.20.4:64000`, `:64010` → `172.30.20.12:64010`, `:64012` → `172.30.20.2:64012`, `:64080` → `172.30.20.7:64080` (Cerniq dev services)
+
+### B7. `hz.215` — 95.216.36.215 (Proxmox Cluster Node / Neanelu Host)
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `95.216.36.215/26` pe `vmbr0` |
+| **vSwitch Primary** | `10.0.1.9/24` pe `vmbr4000` |
+| **vSwitch Secondary** | `10.0.1.11/24` pe `vmbr4000` (secondary) |
+| **vSwitch Mgmt** | `10.20.0.11/24` pe `vmbr4000` |
+| **Gateway** | `95.216.36.193` |
+| **Firewall** | Iptables + **PVEFW (Proxmox Firewall) ACTIV** |
+
+Iptables regelile critice INPUT:
+- `10.0.0.0/16` → ACCEPT (comment: `vswitch-full`)
+- `77.42.76.185` → ACCEPT (comment: `orchestrator`)
+- `10.0.1.0/24` → ACCEPT (comment: `vswitch-monitoring`)
+- Cluster-mesh: toate IP-urile `hz.*` ACCEPT
+
+PVEFW HOST-IN permite: SSH (ipset whitelist), 8006 (Proxmox WebUI), 80, 443, ICMP ping, management (5900-5999, 3128), Corosync (`5404:5405` între `10.0.1.11`, `10.0.1.12`, `10.0.0.2`)
+
+NAT/DNAT: `10.0.1.9:8000` → DNAT `10.0.1.115:8000` (proxy către LLM Guard)
+
+### B8. `hz.223` — 95.217.32.223 (Proxmox Cluster Node / Cerniq Host)
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `95.217.32.223/26` pe `enp98s0f0` |
+| **vSwitch Primary** | `10.0.1.8/24` pe `vmbr4000` |
+| **vSwitch Secondary** | `10.0.1.12/24` pe `vmbr4000` (secondary) |
+| **vSwitch Mgmt** | `10.20.0.12/24` pe `vmbr4000` |
+| **Gateway** | `95.217.32.193` |
+| **Firewall** | Iptables + **PVEFW ACTIV** |
+
+Iptables regelile critice INPUT:
+- `95.216.36.226` → ACCEPT (comment: `wapp-pro-app`)
+- `10.0.0.0/16` → ACCEPT (comment: `vswitch-full`)
+- `77.42.76.185` → ACCEPT (comment: `orchestrator`)
+- Cluster-mesh: toate IP-urile `hz.*`
+- Corosync: `5404:5405` între `10.0.1.11`, `10.0.1.12`, `10.0.0.2`
+
+NAT/DNAT **CRITICE** (port-forwarding către orchestrator):
+- `10.0.1.8:8200` → DNAT `10.0.0.2:8200` (OpenBao/Vault forward)
+- `10.0.1.8:443` → DNAT `10.0.0.2:443` (Traefik forward)
+
+### B9. `hz.247` — 95.216.68.247 (Proxmox Cluster Node / DB Gateway / LLM Infra)
+| Parametru | Valoare |
+|---|---|
+| **IPv4 Public** | `95.216.68.247/26` pe `enp98s0f0` |
+| **vSwitch Primary** | `10.0.1.7/24` pe `vmbr4000` |
+| **vSwitch Secondary** | `10.0.1.10/24` pe `vmbr4000` (secondary) |
+| **vSwitch Mgmt** | `10.0.20.10/24` pe `vmbr4000` |
+| **Gateway** | `95.216.68.193` |
+| **Firewall** | Iptables + **PVEFW ACTIV** — cel mai complex set din întreaga rețea |
+
+**Reguli VIP Access Control pe `10.0.1.10` (IP secundar — acesta este VIP-ul LLM/Traefik al clusterului):**
+
+Port `443` (Traefik/HTTPS):
+- ALLOW din: `.109`, `.110`, `.111`, `.112` (Cerniq+Neanelu), `.6` (hz.164 dev), `.108` (CI), `.13` (comment: `llm-infra-openbao`)
+- **DENY ALL altele** (`-d 10.0.1.10 --dport 443 -j DROP`)
+
+Port `6379` (Redis):
+- ALLOW din: `.109`, `.110`, `.111`, `.112`, `.6`, `.108`
+- **DENY ALL altele** (`-d 10.0.1.10 --dport 6379 -j DROP`)
+
+Port `49004` (Guardrails API):
+- ALLOW din: `10.0.0.2` (orchestrator, comment: `orchestrator-guardrails-access`), `10.0.1.6` (comment: `neanelu-dev-guardrails-access`)
+- **DENY ALL** (comment: `guardrails-vip-deny-all`)
+
+Porturi `49000-49003` (LLM Inference VIP):
+- ALLOW din: `10.0.0.2` (comment: `orchestrator-llm-access`), `10.0.1.6` (comment: `neanelu-dev-llm-access`), `10.0.1.111` (comment: `neanelu-prod-llm-access`)
+- **DENY ALL** (comment: `llm-vip-deny-all`)
+
+Porturi monitoring masive (`19xxx`, `29xxx`, `39xxx`, `49110-49112`):
+- ALLOW exclusiv din `10.0.0.2` (orchestrator)
+
+**Mangle (TCP MSS Clamping):**
+- `10.0.1.109` → `10.0.0.2:443` — `TCPMSS --set-mss 1360` + `--clamp-mss-to-pmtu`
+- `10.0.1.110` → `10.0.0.2:443` — idem (rezolvă probleme MTU pe vSwitch)
+
+**FORWARD rules (NAT Gateway pentru LXC-uri):**
+Containerele `.107`, `.108`, `.109`, `.110`, `.111`, `.112`, `.115` primesc MASQUERADE strict pe `80`, `443` și `53` (DNS). Orice alt trafic outbound de la ele este **DROP**.
+
+Forward special orchestrator ↔ Neanelu: `10.0.0.2` → `10.0.1.111/112:65000,65001,65210,65211` ACCEPT. Reverse: `10.0.1.111/112` → `10.0.0.2:6379` (Redis) și `:8200` (OpenBao) ACCEPT.
+
+---
+
+## C. LXC CONTAINERS
+
+### C1. `lxc-postgres-main` — 10.0.1.107
+| Parametru | Valoare |
+|---|---|
+| **IP** | `10.0.1.107/24` pe `eth0` |
+| **Gateway** | `10.0.1.7` |
+| **Rută specială** | `10.0.0.0/16` via `10.0.1.1` |
+| **Firewall** | Absent (nici UFW, nici iptables) |
+| **Docker** | Absent |
+
+### C2. `lxc-ci-worker` — 10.0.1.108
+| Parametru | Valoare |
+|---|---|
+| **IP** | `10.0.1.108/24` pe `eth0` |
+| **Gateway** | `10.0.1.7` |
+| **Firewall** | UFW **inactiv**. Iptables: INPUT ACCEPT |
+| **Docker Networks** | `bridge` (172.17.0.0/16) |
+
+### C3. `lxc-llm-guard` — 10.0.1.115
+| Parametru | Valoare |
+|---|---|
+| **IP** | `10.0.1.115/24` pe `eth0` |
+| **Gateway** | `10.0.1.7` |
+| **Firewall** | UFW **inactiv**. Iptables: INPUT/FORWARD ACCEPT |
+| **Docker Networks** | `ai-guardrails_default` (172.18.0.0/16) |
+| **DNAT** | `:8000` → `172.18.0.2:8000` (guardrails container) |
+
+### C4. `lxc-neanelu-prod` — 10.0.1.111
+| Parametru | Valoare |
+|---|---|
+| **IP** | `10.0.1.111/24` pe `eth0` |
+| **Gateway** | `10.0.1.7` |
+| **Firewall** | UFW **inactiv**. Docker isolation rules activ |
+| **Docker Networks** | `neanelu_default` (172.18.0.0/16) |
+
+DNAT:
+- `:65210` → `172.18.0.5:8080` (Traefik/caddy), `:65211` → `172.18.0.7:9127` (exporter)
+- `127.0.0.1:6432` → `172.18.0.6:6432` (PgBouncer)
+- `:65000` → `172.18.0.9:65000`, `:65001` → `172.18.0.8:65001` (App/Worker)
+
+### C5. `lxc-neanelu-staging` — 10.0.1.112
+| Parametru | Valoare |
+|---|---|
+| **IP** | `10.0.1.112/24` pe `eth0` |
+| **Gateway** | `10.0.1.7` |
+| **Docker Networks** | `neanelu_default` (172.18.0.0/16) |
+
+DNAT: Identic cu producția (65210, 65211, 6432, 65000, 65001).
+
+### C6. `lxc-prod-cerniq` — 10.0.1.109
+| Parametru | Valoare |
+|---|---|
+| **IP** | `10.0.1.109/24` pe `eth0` |
+| **Gateway** | `10.0.1.7` |
+| **Firewall** | UFW **inactiv** |
+
+Docker Networks:
+| Network | Subnet |
+|---|---|
+| `cerniq_backend` | `172.29.20.0/24` |
+| `cerniq_data` | `172.29.30.0/24` |
+| `cerniq_public` | `172.29.10.0/24` |
+
+DNAT: `:64094` → `172.29.20.5:8080`, `:64095` → `172.29.30.15:9127`
+
+### C7. `lxc-staging-cerniq` — 10.0.1.110
+| Parametru | Valoare |
+|---|---|
+| **IP** | `10.0.1.110/24` pe `eth0` |
+| **Gateway** | `10.0.1.7` |
+
+Docker Networks: Identic cu prod (`cerniq_backend`, `cerniq_data`, `cerniq_public` — aceleași subnet-uri `172.29.x.0/24`).
+
+DNAT: `:64000` → `172.29.10.2:64000`, `:64012` → `172.29.10.3:64012`, `:64094` → `172.29.20.4:8080`, `:64010` → `172.29.20.8:64010`, `:64080` → `172.29.20.9:64080`, `:64095` → `172.29.30.15:9127`
+
+### C8. `lxc-wapp-pro-app` — DUAL-HOMED (10.0.1.105 + 95.216.36.226)
+| Parametru | Valoare |
+|---|---|
+| **IP Intern** | `10.0.1.105/24` pe `eth0` |
+| **IP PUBLIC** | `95.216.36.226/32` pe `eth1` |
+| **Gateway Default** | `95.216.36.193` via `eth1` (public) |
+| **Gateway Secundar** | `10.0.1.7` via `eth0` (intern) |
+| **Rută specială** | `10.0.0.0/8` via `10.0.1.1` dev `eth0` |
+| **Firewall** | UFW **ACTIV** — Default: `deny (incoming)` |
+
+UFW Rules:
+- `22/tcp` ALLOW din Anywhere
+- `9100/tcp` ALLOW din `10.0.1.0/24` și `10.0.0.0/8` (Prometheus)
+- `26000-26004/tcp` ALLOW **exclusiv** din `10.0.1.10` (Proxmox VIP pe hz.247)
+
+Docker Networks: `evolution-wapp_wapp-internal` (172.18.0.0/16)
+
+DNAT: `10.0.1.105:26000` → `172.18.0.2:7780`
+
+---
+
+## D. CLUSTER HZ.118 STANDALONE LXC (IPv4 public direct)
+
+### D1. `hz.118.lxc.100` — 95.216.72.100 (server.traktors.ro)
+| Parametru | Valoare |
+|---|---|
+| **IP** | `95.216.72.100/32` pe `eth0` |
+| **Gateway** | `95.216.72.65` |
+| **Firewall** | Fail2Ban activ (FTP, ModSecurity, Postfix, Dovecot, SSH, recidive) |
+| **SSH Port** | **1321** (non-standard!) |
+| **Docker** | Absent |
+
+### D2. `hz.118.lxc.101` — 95.216.125.170 (tecdocnode)
+| Parametru | Valoare |
+|---|---|
+| **IP** | `95.216.125.170/32` pe `eth0` |
+| **Gateway** | `95.216.125.161` |
+| **Firewall** | UFW **ACTIV** — Default: `deny`. Permite: `80/tcp` (Nginx), `443`, `22/tcp` |
+| **Docker** | Absent |
+
+### D3. `hz.118.lxc.102` — 95.216.125.171 (tecdocmysql)
+| Parametru | Valoare |
+|---|---|
+| **IP** | `95.216.125.171/32` pe `eth0` |
+| **Gateway** | `95.216.125.161` |
+| **Firewall** | UFW **inactiv**, iptables absent |
+| **Docker** | Absent |
+
+### D4. `hz.118.lxc.103` — 95.216.125.172 (mediserver2)
+| Parametru | Valoare |
+|---|---|
+| **IP** | `95.216.125.172/32` pe `eth0` |
+| **Gateway** | `95.216.125.161` |
+| **Firewall** | UFW **ACTIV** — Default: `deny`. Permite: `80,443/tcp` (Nginx Full), `22/tcp` |
+| **Docker** | Absent |
+
+---
+
+## E. PROXMOX CLUSTER (Corosync)
+
+Cele trei noduri ale clusterului Proxmox HA sunt: `hz.247` (`10.0.1.10`), `hz.215` (`10.0.1.11`), `hz.223` (`10.0.1.12`). Membrul suplimentar de quorum este orchestratorul (`10.0.0.2`).
+
+Corosync comunică pe porturile **UDP 5404:5405** bidirecțional între aceste 3+1 noduri, permis explicit în PVEFW HOST-IN/HOST-OUT pe fiecare.
+
+---
+
+## F. CLUSTER-MESH FIREWALL MATRIX
+
+Fiecare nod bare-metal are reguli iptables bilaterale (INPUT + OUTPUT) de ACCEPT pentru toate celelalte IP-uri publice din mesh. Tabelul complet:
+
+| IP Public | Alias | vSwitch IP |
+|---|---|---|
+| `77.42.76.185` | orchestrator | `10.0.0.2` |
+| `95.216.66.62` | hz.62 | `10.0.1.62` |
+| `49.13.97.113` | hz.113 | `10.0.1.13` |
+| `95.216.72.118` | hz.118 | `10.0.1.4` |
+| `94.130.68.123` | hz.123 | `10.0.1.5` |
+| `95.216.225.157` | hz.157 | `10.0.1.3` |
+| `135.181.183.164` | hz.164 | `10.0.1.6` |
+| `95.216.36.215` | hz.215 | `10.0.1.9` (secondary: `.11`) |
+| `95.217.32.223` | hz.223 | `10.0.1.8` (secondary: `.12`) |
+| `95.216.68.247` | hz.247 | `10.0.1.7` (secondary: `.10`) |
+
+Regula globală pe toate nodurile: `10.0.0.0/8 → dport 1080 → ACCEPT`
+
+---
+
+## G. PROXMOX-ROUTED PUBLIC IPS (Alocate containerelor, invizibile pe host)
+
+> **CRITICĂ:** Aceste IP-uri NU apar pe interfețele host-urilor (`ip addr show`), dar sunt rutate prin bridge-ul `vmbr0`/`vmbr4000` către containerele LXC. Au fost extrase direct din configurațiile Proxmox (`/etc/pve/lxc/*.conf`). Omiterea lor din documentație duce la imposibilitatea de a înțelege complet topologia.
+
+### G1. `hz.118` — Pool de IP-uri publice rutate (subnet `95.216.72.64/26` + `95.216.125.160/27`)
+IP-uri alocate containerelor din `/etc/pve/lxc/`:
+
+| IP Public Rutat | Container Destinație | Bridge | Gateway |
+|---|---|---|---|
+| `95.216.72.100/32` | `hz.118.lxc.100` (server.traktors.ro) | `vmbr0` | `95.216.72.65` |
+| `95.216.125.170/32` | `hz.118.lxc.101` (tecdocnode) | `vmbr0` | `95.216.125.161` |
+| `95.216.125.171/32` | `hz.118.lxc.102` (tecdocmysql) | `vmbr0` | `95.216.125.161` |
+| `95.216.125.172/32` | `hz.118.lxc.103` (mediserver2) | `vmbr0` | `95.216.125.161` |
+| `95.216.125.173/32` | Host spare (`veth-spare`) | — | `95.216.125.161` |
+
+**Total IPs publice pe hz.118:** 6 (host + spare + 4 containere)
+
+### G2. `hz.157` — Pool de IP-uri publice rutate (subnet `95.216.225.128/26`)
+IP-uri alocate containerelor din `/etc/pve/lxc/`:
+
+| IP Public Rutat | Container Destinație | Bridge | Gateway |
+|---|---|---|---|
+| `95.216.225.137/32` | LXC neidintificat (firewall=1) | `vmbr0` | `95.216.225.129` |
+| `95.216.225.138/32` | LXC neidintificat (firewall=1) | `vmbr0` | `95.216.225.129` |
+| `95.216.225.139/32` | LXC neidintificat (fără firewall) | `vmbr0` | `95.216.225.129` |
+| `95.216.225.142/32` | LXC neidintificat (firewall=1) | `vmbr0` | `95.216.225.129` |
+| `95.216.225.145/32` | LXC neidintificat (firewall=1) | `vmbr0` | `95.216.225.129` |
+
+**Total IPs publice pe hz.157:** 6 (host + 5 containere). Aceste 5 containere nu au SSH alias definit — sunt probabil VM-uri legacy sau containere inactive.
+
+### G3. `hz.215` — Pool de IP-uri rutate (vSwitch intern + 1 public)
+IP-uri alocate containerelor din `/etc/pve/lxc/`:
+
+| IP Rutat | Container Destinație | Bridge | Gateway |
+|---|---|---|---|
+| `10.0.1.105/24` | `lxc-wapp-pro-app` | `vmbr4000` | `10.0.1.7` |
+| `95.216.36.226/32` | `lxc-wapp-pro-app` (eth1 — PUBLIC!) | `vmbr0` | `95.216.36.193` |
+| `10.0.1.111/24` | `lxc-neanelu-prod` (MTU 1400) | `vmbr4000` | `10.0.1.7` |
+| `10.0.1.112/24` | `lxc-neanelu-staging` (MTU 1400) | `vmbr4000` | `10.0.1.7` |
+| `10.0.1.115/24` | `lxc-llm-guard` (MTU 1400) | `vmbr4000` | `10.0.1.7` |
+| `10.0.1.104/16` | LXC neidintificat (fără SSH alias!) | `vmbr4000` | `10.0.0.2` |
+| `10.10.1.106/24` | LXC neidintificat (rețea alternativă!) | `vmbr4000` | `10.10.1.1` |
+
+**Atenție:** `10.0.1.104` este un container descoperit în configurațiile Proxmox ale `hz.215` care NU are alias SSH definit. Gateway-ul său (`10.0.0.2` = orchestrator) diferă de celelalte (`10.0.1.7`). La fel, `10.10.1.106` operează pe o subrețea complet diferită (`10.10.1.0/24`).
+
+### G4. `hz.223` — Pool de IP-uri rutate (vSwitch intern)
+IP-uri alocate containerelor din `/etc/pve/lxc/`:
+
+| IP Rutat | Container Destinație | Bridge | Gateway |
+|---|---|---|---|
+| `10.0.1.108/24` | `lxc-ci-worker` (MTU 1400) | `vmbr4000` | `10.0.1.7` |
+| `10.0.1.109/24` | `lxc-prod-cerniq` (MTU 1400) | `vmbr4000` | `10.0.1.7` |
+| `10.0.1.110/24` | `lxc-staging-cerniq` (MTU 1400) | `vmbr4000` | `10.0.1.7` |
+
+### G5. `hz.247` — Pool de IP-uri rutate (vSwitch intern)
+IP-uri alocate containerelor din `/etc/pve/lxc/`:
+
+| IP Rutat | Container Destinație | Bridge | Gateway |
+|---|---|---|---|
+| `10.0.1.107/24` | `lxc-postgres-main` (MTU 1400) | `vmbr4000` | `10.0.1.7` |
+
+---
+
+## H. DIRECTIVE PENTRU AGENȚI
+
+1. **Nu inventa porturi.** Dacă scrii un connection-string pentru Redis din `lxc-neanelu-prod`, este `10.0.0.2:6379` (orchestrator). Dacă scrii din Cerniq prod, este `10.0.1.10:6379` (VIP pe hz.247). Ambele sunt reale, verificate din DNAT și iptables.
+2. **VIP-ul `10.0.1.10` este gateway-ul central LLM/Traefik/Redis.** Accesul la el este controlat chirurgical. Nu toți clienții au acces la toate porturile. Consultă secțiunea B9 pentru ACL-urile exacte.
+3. **`lxc-wapp-pro-app` are UFW activ cu DROP default.** Nu poți deschide porturi arbitrare pe ea fără a modifica UFW. Seria `26000-26004` este singurul range permis din exterior (și doar din `10.0.1.10`).
+4. **MTU `1450` pe vSwitch.** Conexiunile prin `enp7s0` de pe orchestrator au MTU redus. Regulile mangle pe hz.247 fac TCP MSS clamping la `1360` pentru traficul Cerniq → orchestrator pe port 443. Ține cont de asta la debugging-ul conexiunilor lente.
+5. **hz.223 face NAT forward** al porturilor `443` și `8200` de la containerele interne către `10.0.0.2` (orchestrator). Asta înseamnă că Traefik-ul și OpenBao-ul de pe orchestrator sunt accesibile din toată rețeaua vSwitch prin VIP-ul `10.0.1.8`.
+6. **Niciun LXC container nu are acces nerestricționat la internet.** Toate containerele de pe hz.247 sunt filtrate prin FORWARD cu whitelist strict pe 80, 443, 53. Orice alt port outbound este DROP.
+7. **hz.157 deține 5 IP-uri publice adiționale** (`95.216.225.137-145`) alocate unor containere fără alias SSH. Înainte de a le folosi, verifică starea reală a containerelor din Proxmox WebUI.
+8. **Containere nedocumentate:** `10.0.1.104` (pe hz.215, gateway orchestrator) și `10.10.1.106` (pe hz.215, rețea alternativă `10.10.1.0/24`) există în config dar nu au alias SSH. Nu le ignora — pot fi resurse disponibile sau legacy care trebuie auditate suplimentar.

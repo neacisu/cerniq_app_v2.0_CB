@@ -4,6 +4,12 @@
   "include": [],
   "references": [
     {
+      "path": "../../packages/messaging"
+    },
+    {
+      "path": "../../packages/llm"
+    },
+    {
       "path": "../../packages/gateways/gateway-hello"
     },
     {

@@ -34,17 +34,42 @@ jobs:
       - name: Sync TS references
         run: pnpm exec nx sync
 
-      - name: Lint
-        run: pnpm exec nx run-many -t lint --all
+      - name: Stack gates (Python)
+        run: python3 tools/ci/run_gates.py
 
-      - name: Build
-        run: pnpm exec nx run-many -t build --projects=api,web
+      - name: Lint (affected sau tot)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm exec nx affected -t lint --base=origin/${{ github.base_ref }} --head=HEAD --parallel=3
+          else
+            pnpm exec nx run-many -t lint --all --parallel=3
+          fi
+
+      - name: Typecheck
+        run: pnpm exec nx run-many -t typecheck --all --parallel=3
+
+      - name: Build (affected sau tot)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm exec nx affected -t build --base=origin/${{ github.base_ref }} --head=HEAD --parallel=3 --projects=api,web,@cerniq/llm,@cerniq/messaging
+          else
+            pnpm exec nx run-many -t build --projects=api,web,@cerniq/llm,@cerniq/messaging --parallel=3
+          fi
 
       - name: Unit tests (Jest)
-        run: pnpm exec nx run-many -t test --all
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm exec nx affected -t test --base=origin/${{ github.base_ref }} --head=HEAD --parallel=3
+          else
+            pnpm exec nx run-many -t test --all --parallel=3
+          fi
 
       - name: Generator unit tests (Python)
         run: python3 -m unittest discover -s tools/generators -p 'test_*.py' -v
+
+      - name: Build Storybook (web)
+        run: pnpm --filter web exec storybook build -o ../../dist/storybook-web
+        continue-on-error: false
 
       - name: Install Playwright system deps (Chromium)
         run: pnpm exec playwright install-deps chromium

@@ -1,0 +1,109 @@
+openapi: 3.1.0
+info:
+  title: Cerniq Cognitive Brain v2 API
+  version: 1.0.0
+  description: Contract REST + convenții SSE. Ingress via Traefik.
+servers:
+  - url: https://api.v2.cerniq.app/v1
+    description: Producție (Traefik → Fastify :25010)
+paths:
+  /health:
+    get:
+      summary: Liveness
+      operationId: health
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /ready:
+    get:
+      summary: Readiness (DB/Redis opțional)
+      operationId: ready
+      responses:
+        '200':
+          description: Gata
+        '503':
+          description: Nepregătit
+  /cognitive/status:
+    get:
+      summary: Status sintetic Brain (demo)
+      operationId: cognitiveStatus
+      parameters:
+        - name: X-Request-Id
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CognitiveStatus'
+  /cognitive/stream:
+    get:
+      summary: SSE telemetrie
+      operationId: cognitiveStream
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /webhooks/inbound:
+    post:
+      summary: Webhook inbound (HMAC + idempotency)
+      operationId: webhookInbound
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Cerniq-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Acceptat
+        '409':
+          description: Idempotency replay
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: array
+              items: {}
+    CognitiveStatus:
+      type: object
+      properties:
+        gateway:
+          type: string
+        neuron:
+          type: string
+        synapse:
+          type: string

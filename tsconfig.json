@@ -23,6 +23,15 @@
     },
     {
       "path": "./packages/gateways/gateway-hello"
+    },
+    {
+      "path": "./packages/llm"
+    },
+    {
+      "path": "./packages/messaging"
+    },
+    {
+      "path": "./apps/temporal-worker"
     }
   ]
 }
