@@ -12,6 +12,7 @@ GATES = [
     "no_critical_placeholders.py",
     "orchestration_manifests.py",
     "golden_thread_matrix_gate.py",
+    "git_bootstrap_branches_aligned.py",
     "lockfile_hash_echo.py",
 ]
 
