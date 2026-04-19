@@ -1,3 +1,5 @@
+/// <reference path="./jest-runtime-globals.d.ts" />
+import { describe, expect, it } from '@jest/globals';
 import React from 'react';
 import { render } from '@testing-library/react';
 import Page from '../app/page';

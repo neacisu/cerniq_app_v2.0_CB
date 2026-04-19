@@ -12,6 +12,8 @@ concurrency:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      NX_DAEMON: 'false'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +42,9 @@ jobs:
 
       - name: Unit tests (Jest)
         run: pnpm exec nx run-many -t test --all
+
+      - name: Generator unit tests (Python)
+        run: python3 -m unittest discover -s tools/generators -p 'test_*.py' -v
 
       - name: Install Playwright system deps (Chromium)
         run: pnpm exec playwright install-deps chromium

@@ -43,6 +43,30 @@ def write_file(path: Path, content: str, dry_run: bool) -> None:
     print(f"wrote {path}")
 
 
+def _manifest_row_id(row: dict[str, str]) -> str:
+    return (row.get("id") or row.get("package_suffix") or "").strip()
+
+
+def generate_neuron_stubs(rows: list[dict[str, str]], root: Path, dry_run: bool) -> None:
+    for row in rows:
+        nid = _manifest_row_id(row)
+        if not nid:
+            continue
+        slug = nid.removeprefix("neuron-") or nid
+        out = root / "packages" / "neurons" / nid / "src" / "generated" / "stub.ts"
+        write_file(out, neuron_ts_stub(slug), dry_run)
+
+
+def generate_synapse_stubs(rows: list[dict[str, str]], root: Path, dry_run: bool) -> None:
+    for row in rows:
+        sid = _manifest_row_id(row)
+        if not sid:
+            continue
+        slug = sid.removeprefix("synapse-") or sid
+        out = root / "packages" / "synapses" / sid / "src" / "generated" / "stub.ts"
+        write_file(out, synapse_ts_stub(slug), dry_run)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate stubs from NEURON/SYNAPSE CSV manifests.")
     parser.add_argument("--apply", action="store_true", help="Write files; default is dry-run.")
@@ -59,24 +83,10 @@ def main() -> int:
         print(f"missing {neuron_csv}", file=sys.stderr)
         return 1
 
-    neurons = read_csv(neuron_csv)
-    for row in neurons:
-        nid = (row.get("id") or row.get("package_suffix") or "").strip()
-        if not nid:
-            continue
-        slug = nid.removeprefix("neuron-") or nid
-        out = root / "packages" / "neurons" / nid / "src" / "generated" / "stub.ts"
-        write_file(out, neuron_ts_stub(slug), dry_run)
+    generate_neuron_stubs(read_csv(neuron_csv), root, dry_run)
 
     if synapse_csv.is_file():
-        synapses = read_csv(synapse_csv)
-        for row in synapses:
-            sid = (row.get("id") or row.get("package_suffix") or "").strip()
-            if not sid:
-                continue
-            slug = sid.removeprefix("synapse-") or sid
-            out = root / "packages" / "synapses" / sid / "src" / "generated" / "stub.ts"
-            write_file(out, synapse_ts_stub(slug), dry_run)
+        generate_synapse_stubs(read_csv(synapse_csv), root, dry_run)
 
     return 0
 

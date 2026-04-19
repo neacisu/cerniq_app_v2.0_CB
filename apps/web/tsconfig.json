@@ -41,6 +41,8 @@
     "app/**/*.jsx",
     "app/**/*.ts",
     "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
     "next-env.d.ts",
     ".next/types/**/*.ts"
   ],
@@ -49,6 +51,7 @@
     "dist",
     "node_modules",
     "jest.config.ts",
+    "specs/**",
     "app/**/*.spec.ts",
     "app/**/*.test.ts",
     "src/**/*.spec.ts",
