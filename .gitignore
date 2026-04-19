@@ -3,8 +3,9 @@ node_modules/
 .pnpm-store/
 
 # Build / cache
-.nx/cache
+.nx/
 dist/
+tmp/
 .next/
 out/
 coverage/
@@ -27,3 +28,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+test-output
+
+# Next.js
+.next
+out

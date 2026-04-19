@@ -1,0 +1,7 @@
+{
+  "name": "neuron-ping",
+  "version": "0.0.1",
+  "type": "neuron",
+  "description": "Example neuron — replace with manifeste NEURON_MATRIX",
+  "stage": "E1"
+}

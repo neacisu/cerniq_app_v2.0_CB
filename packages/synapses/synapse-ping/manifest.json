@@ -1,0 +1,7 @@
+{
+  "name": "synapse-ping",
+  "version": "0.0.1",
+  "type": "synapse",
+  "description": "Example synapse — Redis Streams consumer va fi legat aici",
+  "stream": "brain.synapse.ping"
+}

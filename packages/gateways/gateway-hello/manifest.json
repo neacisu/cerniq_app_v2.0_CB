@@ -1,0 +1,6 @@
+{
+  "name": "gateway-hello",
+  "version": "0.0.1",
+  "type": "gateway",
+  "description": "Example gateway — Temporal/Streams conform doc-orchestration-matrix-adr"
+}

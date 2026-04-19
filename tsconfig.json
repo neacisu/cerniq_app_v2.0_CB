@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/api"
+    },
+    {
+      "path": "./apps/web-e2e"
+    },
+    {
+      "path": "./apps/web"
+    },
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./packages/neurons/neuron-ping"
+    },
+    {
+      "path": "./packages/synapses/synapse-ping"
+    },
+    {
+      "path": "./packages/gateways/gateway-hello"
+    }
+  ]
+}

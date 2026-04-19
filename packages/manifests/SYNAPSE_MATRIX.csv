@@ -1,0 +1,2 @@
+id,name,stream_key,consumer_group,package_suffix
+synapse-ping,PingStream,brain:ping:events,cg-ping,synapse-ping
