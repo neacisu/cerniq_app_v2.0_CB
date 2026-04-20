@@ -28,7 +28,7 @@
     "@nx/js": "21.6.11",
     "@nx/next": "21.6.11",
     "@nx/node": "21.6.11",
-    "@nx/playwright": "21.6.11",
+    "@nx/playwright": "22.6.5",
     "@nx/workspace": "21.6.11",
     "@playwright/test": "^1.59.1",
     "@swc-node/register": "^1.11.1",
