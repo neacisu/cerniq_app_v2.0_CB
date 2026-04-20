@@ -1,58 +1,79 @@
-# Inventar suite UI — blueprint §22–§25, §28 vs §18
+# Inventar suite UI — blueprint §21–§29, §22–§25, §28 vs §18
 
-**Sursă:** [Cerniq_CB_V2_UI_Blueprint_Implementation_Plan_Apr2026_v2_full_suite.md](../research/Cerniq_CB_V2_UI_Blueprint_Implementation_Plan_Apr2026_v2_full_suite.md). **Produs:** suite CRM+sales+ops centrată pe Brain (§21).
+**Sursă canonică:** [Cerniq_CB_V2_UI_Blueprint_Implementation_Plan_Apr2026_v2_full_suite.md](../research/Cerniq_CB_V2_UI_Blueprint_Implementation_Plan_Apr2026_v2_full_suite.md).
 
-## Vocabular înghețat (§28)
+**Produs (§21):** suite **CRM + sales + ops** centrată pe **CognitiveBrain** — Brain = motor; suite = suprafața zilnică.
 
-gateway, neuron, synapse, trace, tenant, workspace, batch, account, contact, opportunity, workflow, inbox, pipeline — termeni canonici UI/API.
+**Fără contrazicere stacks:** ingress **Traefik**, fără datastore duplicat în compose, API/SSE conform [contracts-api-events.md](./contracts-api-events.md) și stacks-02.
 
-## Fazare
+---
 
-| Linie | Faze | Focus |
-|-------|------|-------|
-| **Brain §18** | 0–5 | bootstrap shell → atlas/polish cognitive |
-| **Suite §28** | 0–5 | fondare produs → hardening enterprise |
+## 1. Vocabular înghețat (§28 Phase 0 — extras din blueprint)
 
-Implementare: **nu** începe capitole business dense înainte de suite §28 Faza 0–1 (shell + design system minim).
+Din blueprint **§28 Phase 0**: gateway, neuron, synapse, **account**, **contact**, **opportunity**, **conversation**, **workflow**, **order**, **contract**, **incident**, **run**, **trace** (+ termeni deja folosiți în repo: tenant, workspace, batch, pipeline…).
 
-## Capitol → pagini țintă → epic backend/API
+Termenii canonici UI/API trebuie să coincidă cu OpenAPI și manifeste (`NEURON_MATRIX`, etc.).
 
-| §22 | Domeniu | Rute UI țintă (prefix) | API / epic |
-|-----|---------|------------------------|------------|
-| 22.1 | Home & workspace | `/home/*` | notificări, saved views, `GET /v1/me/work` |
-| 22.2 | CognitiveBrain | `/brain/*` | cognitive status, stream, topology, traces — OpenAPI + SSE |
-| 22.3 | Ingest | `/ingest/*` | batch, mapping, validation, quarantine |
-| 22.4 | CRM | `/customers/*` | accounts, contacts, Customer 360, segments |
-| 22.5 | Inbox | `/inbox/*` | conversații, composer, SLA |
-| 22.6 | Sales | `/sales/*` | pipeline, opportunities, forecast |
-| 22.7 | Workflows | `/workflows/*` | catalog, builder, runs, DLQ — Temporal |
-| 22.8 | Operations | `/operations/*` | orders, billing, logistics — legături incidents Brain |
-| 22.9 | Analytics | `/analytics/*` | dashboards, drill-down trace |
-| 22.10 | Admin | `/admin/*` | users, roles, tenant, policies, LLM routing |
+---
 
-## §23 — mapare pagini (rezumat)
+## 2. Fazare — două linii (§18 Brain vs §28 suite)
 
-- **23.1:** Workspace Home, My Work, Saved Views, Notifications.
-- **23.2:** Overview, Live, Gateways, Gateway detail, Neuron, Synapse, Topology, Traces, Memory, Settings, Incident.
-- **23.3:** Imports, Connectors, Mapping, Validation, Quarantine, Audit.
-- **23.4:** Accounts, Contacts, Customer 360, Graph, Segments.
-- **23.5:** Inbox, Thread, Composer, SLA.
-- **23.6:** Pipeline, Opportunity, Deal room, Forecast.
-- **23.7:** Catalog, Builder, Run queue, DLQ, Approvals.
-- **23.8:** Orders, Contracts, Billing, Logistics, Churn, Referrals.
-- **23.9:** Executive, Operational, Drill-down.
-- **23.10:** Users, Roles, Tenant, Policies, Model routing, Audit log, Retention.
+| Linie | Secțiune blueprint | Faze | Focus |
+|-------|---------------------|------|--------|
+| **Brain-centric** | **§18** Phases 0–5 | 0 bootstrap → 5 atlas/polish | Shell, design system, Overview/Live, gateway/neuron/synapse, topology, traces, memory |
+| **Suite completă** | **§28** Phases 0–5 | 0 fondare → 5 hardening enterprise | Taxonomie capitole, homes per capitol, workbench-uri flagship, ops, analytics, QA |
 
-Fiecare rând: **implementat** în cod sau **ADR Deferred** cu criteriu și dată țintă.
+**Regulă:** nu începeți capitole business dense (§28 Faza 2+) înainte de **§28 Faza 0–1** (shell + design system + homes) — vezi plan `ui-blueprint-phased-milestones`.
 
-## Șabloane §24
+---
 
-Mapare la componente: ingest §24.1, Customer 360 §24.2, Inbox §24.3, Pipeline §24.4, Workflow §24.5, Analytics §24.6.
+## 3. Taxonomie capitole §22 → rută UI țintă → todo / epic
 
-## Nav două niveluri (§25)
+| §22 | Capitol (denumire blueprint) | Prefix rută țintă | Todo plan (mapare) | Status livrare |
+|-----|------------------------------|-------------------|----------------------|----------------|
+| 22.1 | Home and workspace | `/home/*` | `ui-chapter-home-workspace` | În curs / ADR |
+| 22.2 | CognitiveBrain core | `/brain/*` | `ui-chapter-brain-core-pages`, `ui-api-routes-sse-telemetry` | În curs |
+| 22.3 | Data ingest and enrichment | `/ingest/*` | `ui-chapter-ingest-enrichment`, `impl-import-domain-validation` | În curs / ADR |
+| 22.4 | CRM and customer intelligence | `/customers/*` | `ui-chapter-crm-intelligence` | Pending epic |
+| 22.5 | Unified Inbox and communications | `/inbox/*` | `ui-chapter-inbox-communications` | Pending epic |
+| 22.6 | Sales pipeline and revenue execution | `/sales/*` | `ui-chapter-sales-revenue` | Pending epic |
+| 22.7 | Workflow automation and orchestration | `/workflows/*` | `ui-chapter-workflows-automation`, Temporal | Pending epic |
+| 22.8 | Operations and business execution | `/operations/*` | `ui-chapter-ops-execution` | Pending epic |
+| 22.9 | Analytics, telemetry, and decision intelligence | `/analytics/*` | `ui-chapter-analytics-intelligence` | Pending epic |
+| 22.10 | Administration, governance, and security | `/admin/*` | `ui-chapter-admin-security`, `auth-adr-impl` | În curs / ADR |
 
-Primar: capitole din tabelul §22. Secundar: sub-nav per capitol din §23; breadcrumbs semantice (business vs Brain).
+**Excludere:** pagină/capitol poate fi **ADR Deferred** cu criteriu măsurabil și dată țintă.
 
-## Fără contrazicere stacks
+---
 
-- Ingress Traefik; fără datastore local; SSE/API prin același edge policy ca [contracts-api-events.md](./contracts-api-events.md).
+## 4. Inventar pagini §23 (rezumat către blueprint)
+
+Secțiunile **23.1–23.10** din blueprint listează paginile pe capitol (Home workspace, Brain Overview/Live/Gateways/… , Ingest, CRM, Inbox, Sales, Workflows, Ops, Analytics, Admin). **Detaliul enumerărilor** rămâne în fișierul blueprint (sursă); acest inventar impune doar **trasabilitate**: fiecare pagină țintă are rând în backlog sau **ADR Excluded**.
+
+---
+
+## 5. Șabloane chapter §24
+
+| §24 | Șablon | Folosire |
+|-----|--------|----------|
+| 24.1 | Data ingest | Imports, mapping, validation |
+| 24.2 | Customer 360 | Account, contacts, opportunities |
+| 24.3 | Unified Inbox | Thread, composer |
+| 24.4 | Pipeline and opportunity | Deal room, forecast |
+| 24.5 | Workflow and operations | Run queue, approvals |
+| 24.6 | Executive analytics | KPI, drill-down |
+
+---
+
+## 6. Navigație două niveluri (§25)
+
+- **Primar:** capitole (Home, Brain, Ingest, Customers, … Admin).
+- **Secundar:** secțiuni locale per capitol; breadcrumbs semantice business vs Brain.
+
+---
+
+## 7. Legături monorepo
+
+- Shell: `apps/web/app/(shell)/`, [frontend-version-pin.md](./frontend-version-pin.md).
+- OpenAPI: `docs/openapi/openapi.yaml`.
+- Golden thread: [golden-thread-matrix.md](./golden-thread-matrix.md).

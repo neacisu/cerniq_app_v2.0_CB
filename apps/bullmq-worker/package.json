@@ -1,0 +1,18 @@
+{
+  "name": "bullmq-worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "jest"
+  },
+  "nx": {
+    "tags": ["scope:bullmq", "type:app"]
+  },
+  "dependencies": {
+    "@cerniq/messaging": "workspace:*",
+    "prom-client": "^15.1.3"
+  }
+}

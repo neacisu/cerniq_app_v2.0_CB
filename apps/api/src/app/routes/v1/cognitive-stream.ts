@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
  * SSE Brain — aliniat doc-enterprise-contracts-api-events.
  */
 const cognitiveStream: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/v1/cognitive/stream', async (request, reply) => {
+  fastify.get('/cognitive/stream', async (request, reply) => {
     const rid = request.requestId;
     const stream = Readable.from(
       (async function* () {

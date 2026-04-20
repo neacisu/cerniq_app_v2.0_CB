@@ -1,11 +1,12 @@
 import { FastifyPluginAsync } from 'fastify';
+import { chaptersResolvedFromJwt } from '../../../lib/rbac-chapters.js';
 
 /**
  * Profil minim: cere `X-Tenant-Id` (UUID) + JWT HS256 (`JWT_SECRET` ≥ 32 caractere) cu `sub` și opțional `tid` aliniat tenantului.
  * Dev: `AUTH_DEV_ALLOW_TENANT_HEADER=1` + `NODE_ENV!==production` permite doar header tenant (fără JWT) — interzis în producție.
  */
 const me: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/v1/me', async (request, reply) => {
+  fastify.get('/me', async (request, reply) => {
     if (!request.tenantId) {
       return reply.status(403).send({
         error: {
@@ -33,7 +34,7 @@ const me: FastifyPluginAsync = async (fastify) => {
       return {
         tenant_id: request.tenantId,
         subject: request.auth.sub,
-        chapters: ['chapter:brain', 'chapter:home'],
+        chapters: chaptersResolvedFromJwt(request.auth, { devTenantOnly: false }),
       };
     }
 
@@ -41,7 +42,7 @@ const me: FastifyPluginAsync = async (fastify) => {
       return {
         tenant_id: request.tenantId,
         subject: 'dev-tenant-header-only',
-        chapters: ['chapter:brain', 'chapter:home'],
+        chapters: chaptersResolvedFromJwt(null, { devTenantOnly: true }),
       };
     }
 

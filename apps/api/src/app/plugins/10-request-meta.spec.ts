@@ -10,7 +10,11 @@ describe('plugin 10-request-meta', () => {
   beforeEach(async () => {
     server = Fastify();
     await server.register(requestMeta);
-    server.get('/probe', async (request) => ({ requestId: request.requestId }));
+    server.get('/probe', async (request) => ({
+      requestId: request.requestId,
+      traceId: request.traceId,
+      parentSpanId: request.parentSpanId,
+    }));
     await server.ready();
   });
 
@@ -28,7 +32,27 @@ describe('plugin 10-request-meta', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['x-request-id']).toBe(rid);
-    expect(res.json()).toEqual({ requestId: rid });
+    expect(res.json()).toEqual({
+      requestId: rid,
+      traceId: undefined,
+      parentSpanId: undefined,
+    });
+  });
+
+  it('parses W3C traceparent for correlation with shared OTel/Tempo (no SDK in app)', async () => {
+    const tp =
+      '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
+    const res = await server.inject({
+      method: 'GET',
+      url: '/probe',
+      headers: { traceparent: tp },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      requestId: expect.any(String),
+      traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+      parentSpanId: '00f067aa0ba902b7',
+    });
   });
 
   it('generates a UUID when x-request-id is absent', async () => {
@@ -38,7 +62,11 @@ describe('plugin 10-request-meta', () => {
     expect(res.statusCode).toBe(200);
     expect(header).toBeDefined();
     expect(UUID_V4_RE.test(header)).toBe(true);
-    expect(res.json()).toEqual({ requestId: header });
+    expect(res.json()).toEqual({
+      requestId: header,
+      traceId: undefined,
+      parentSpanId: undefined,
+    });
   });
 
   it('generates a new id when x-request-id is empty or whitespace-only', async () => {
@@ -64,6 +92,10 @@ describe('plugin 10-request-meta', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['x-request-id']).toBe('upstream-abc');
-    expect(res.json()).toEqual({ requestId: 'upstream-abc' });
+    expect(res.json()).toEqual({
+      requestId: 'upstream-abc',
+      traceId: undefined,
+      parentSpanId: undefined,
+    });
   });
 });

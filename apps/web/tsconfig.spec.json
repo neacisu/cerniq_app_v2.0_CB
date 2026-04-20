@@ -21,10 +21,13 @@
   },
   "include": [
     "next-env.d.ts",
+    "jest-axe.d.ts",
+    "jest.setup.ts",
     "specs/**/*.d.ts",
     "jest.config.ts",
     "specs/**/*.ts",
     "specs/**/*.tsx",
+    "app/api/**/*.ts",
     "lib/**/*.spec.ts",
     "lib/**/*.spec.tsx",
     "lib/**/*.test.ts",

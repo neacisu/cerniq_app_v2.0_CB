@@ -4,9 +4,12 @@ Un increment este **acceptat** când:
 
 1. **Task 0** — repo GitHub, `main` sincron, branch `work/Bootstrap` (sau flux echivalent aprobat).
 2. **Trasabilitate** — fără cerințe ne-mapate din rapoarte + blueprint fără excludere ADR; vezi [golden-thread-matrix.md](./golden-thread-matrix.md) și [ui-blueprint-suite-inventory.md](./ui-blueprint-suite-inventory.md).
-3. **Conformitate stacks** — [compliance-stacks-01-05.md](../compliance-stacks-01-05.md) actualizat pentru regulile atinse.
-4. **Gates PR** — `gate-pr-stacks-02-no-duplicate-datastores`, `gate-pr-stacks-02-traefik-ingress-only`, `gate-pr-stacks-01-no-critical-placeholders` trec în CI unde aplicabil.
-5. **Fără încălcări stacks fără ADR** — orice excepție înregistrată.
+3. **Program ADR** — [adr-program.md](./adr-program.md) respectat: ADR obligatorii la zi sau înlocuiți prin ADR succesor; fără contradicție netă cu stacks.
+4. **Runbook-uri operaționale** — index [runbooks/README.md](../runbooks/README.md) și proceduri aferente (incident, deploy, Postgres, Redis, OpenBao, MTU, Traefik, registru Cloudflare/CMDB) utilizate sau actualizate când todo-ul atinge operațiuni.
+5. **Securitate / privacy** — [security-privacy.md](./security-privacy.md) și matricea de conformitate menținute pentru domeniul atins (loguri Vector, CSP, LLM ACL, rate limit, Stalwart).
+6. **Conformitate stacks** — [compliance-stacks-01-05.md](../compliance-stacks-01-05.md) actualizat pentru regulile atinse.
+7. **Gates PR** — `gate-pr-stacks-02-no-duplicate-datastores`, `gate-pr-stacks-02-traefik-ingress-only`, `gate-pr-stacks-01-no-critical-placeholders` trec în CI unde aplicabil.
+8. **Fără încălcări stacks fără ADR** — orice excepție înregistrată.
 
 **„Complet” produs doc:** artefactele `doc-orchestration-matrix-adr` … `doc-v1-continuity-bridge` și inventarul suite UI sunt verzi sau excluse explicit prin ADR.
 

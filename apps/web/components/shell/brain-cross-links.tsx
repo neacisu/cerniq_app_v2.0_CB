@@ -1,38 +1,66 @@
 import Link from 'next/link';
+import {
+  BRAIN_QS,
+  NEURON_EXPLANATION_FOCUS,
+  brainHref,
+  type BrainCrossEntityInput,
+} from '../../lib/brain-cross-entity';
 
-export function BrainCrossLinks(props: {
-  traceId?: string;
-  gatewayId?: string;
-  neuronId?: string;
-}) {
-  const q = new URLSearchParams();
-  if (props.traceId) q.set('trace', props.traceId);
-  if (props.gatewayId) q.set('gateway', props.gatewayId);
-  if (props.neuronId) q.set('neuron', props.neuronId);
-  const qs = q.toString();
+export type BrainCrossLinksProps = Readonly<BrainCrossEntityInput>;
+
+export function BrainCrossLinks({
+  traceId,
+  gatewayId,
+  neuronId,
+  synapseId,
+}: BrainCrossLinksProps) {
+  const entities: BrainCrossEntityInput = { traceId, gatewayId, neuronId, synapseId };
+
+  const tracesHref = brainHref('/brain/traces', entities);
+  const overviewHref = brainHref('/brain/overview', entities);
+  const gatewaysHref = brainHref('/brain/gateways', entities);
+  const liveHref = brainHref('/brain/live', entities);
+
+  const neuronExplainHref = neuronId
+    ? brainHref('/brain/overview', entities, {
+        [BRAIN_QS.focus]: NEURON_EXPLANATION_FOCUS,
+      })
+    : null;
 
   return (
-    <div className="flex flex-wrap gap-2 text-sm">
+    <nav aria-label="Dovezi Brain" className="flex flex-wrap gap-2 text-sm">
       <Link
-        href={`/brain/traces${qs ? `?${qs}` : ''}`}
+        href={tracesHref}
         className="rounded-md bg-zinc-800 px-2 py-1 text-cyan-300 hover:bg-zinc-700"
       >
         Open trace
       </Link>
       <Link
-        href={`/brain/overview${qs ? `?${qs}` : ''}`}
+        href={overviewHref}
         className="rounded-md bg-zinc-800 px-2 py-1 text-cyan-300 hover:bg-zinc-700"
       >
         Open in Brain
       </Link>
-      {props.neuronId ? (
+      <Link
+        href={gatewaysHref}
+        className="rounded-md bg-zinc-800 px-2 py-1 text-cyan-300 hover:bg-zinc-700"
+      >
+        Open related gateway
+      </Link>
+      <Link
+        href={liveHref}
+        className="rounded-md bg-zinc-800 px-2 py-1 text-cyan-300 hover:bg-zinc-700"
+      >
+        Telemetrie live
+      </Link>
+      {neuronExplainHref ? (
         <Link
-          href={`/brain/live?neuron=${encodeURIComponent(props.neuronId)}`}
+          href={neuronExplainHref}
           className="rounded-md bg-zinc-800 px-2 py-1 text-cyan-300 hover:bg-zinc-700"
         >
-          Neuron explanation
+          View neuron explanation
         </Link>
       ) : null}
-    </div>
+    </nav>
   );
 }

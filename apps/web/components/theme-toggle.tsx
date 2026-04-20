@@ -2,26 +2,45 @@
 
 import { useEffect, useState } from 'react';
 
-/** Comutator temă light/dark (blueprint + milestone UI 3). */
+const STORAGE_KEY = 'cerniq-theme';
+
+function readInitialDark(): boolean {
+  if (globalThis.window === undefined) {
+    return true;
+  }
+  try {
+    const raw = globalThis.localStorage.getItem(STORAGE_KEY);
+    if (raw === 'light') return false;
+    if (raw === 'dark') return true;
+  } catch {
+    /* private mode / quota */
+  }
+  return globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
+}
+
+/** Comutator temă light/dark — tokeni `global.css`; persistă în localStorage (milestone UI 3). */
 export function ThemeToggle() {
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState<boolean>(readInitialDark);
 
   useEffect(() => {
     const root = document.documentElement;
-    if (dark) {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
+    root.classList.toggle('dark', dark);
+    try {
+      globalThis.localStorage.setItem(STORAGE_KEY, dark ? 'dark' : 'light');
+    } catch {
+      /* ignore */
     }
   }, [dark]);
 
   return (
     <button
       type="button"
-      className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300"
+      className="rounded-md border border-cb-border px-2 py-1 text-xs text-cb-ink/90 hover:bg-cb-nav-hover"
+      aria-pressed={dark}
+      aria-label={dark ? 'Comută la temă clară' : 'Comută la temă întunecată'}
       onClick={() => setDark((d) => !d)}
     >
-      {dark ? 'Temă întunecată' : 'Temă clară'}
+      {dark ? 'Întunecată' : 'Clară'}
     </button>
   );
 }

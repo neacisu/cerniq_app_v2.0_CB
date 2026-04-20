@@ -5,12 +5,19 @@ import jwt from 'jsonwebtoken';
 declare module 'fastify' {
   interface FastifyRequest {
     /** JWT HS256 valid din `Authorization: Bearer`; `null` dacă lipsește secret, token sau verificare eșuează. */
-    auth: { sub: string; tid?: string } | null;
+    auth: {
+      sub: string;
+      tid?: string;
+      roles?: string[];
+      chapters?: string[];
+    } | null;
   }
 }
 
 interface CerniqJwtPayload extends jwt.JwtPayload {
   tid?: string;
+  roles?: string[];
+  chapters?: string[];
 }
 
 const plugin: FastifyPluginAsync = async (fastify) => {
@@ -32,7 +39,13 @@ const plugin: FastifyPluginAsync = async (fastify) => {
       }) as CerniqJwtPayload;
       const sub = typeof payload.sub === 'string' ? payload.sub : '';
       const tid = typeof payload.tid === 'string' ? payload.tid : undefined;
-      request.auth = sub ? { sub, tid } : null;
+      const roles = Array.isArray(payload.roles)
+        ? payload.roles.filter((r): r is string => typeof r === 'string')
+        : undefined;
+      const chapters = Array.isArray(payload.chapters)
+        ? payload.chapters.filter((c): c is string => typeof c === 'string')
+        : undefined;
+      request.auth = sub ? { sub, tid, roles, chapters } : null;
     } catch {
       request.auth = null;
     }

@@ -30,5 +30,14 @@ export function validateBusinessRow(
       message: 'Telefon prea scurt',
     });
   }
+  const company = row.company?.trim();
+  if (company !== undefined && company.length > 0 && company.length < 2) {
+    issues.push({
+      row: rowIndex,
+      field: 'company',
+      code: 'COMPANY_NAME_TOO_SHORT',
+      message: 'Denumire companie prea scurtă',
+    });
+  }
   return issues;
 }

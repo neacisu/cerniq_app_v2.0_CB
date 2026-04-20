@@ -1,6 +1,21 @@
-# Runbook-uri Cerniq v2
+# Runbook-uri Cerniq v2 — index
 
-## Incident (SEV)
+Operare aliniată **stacks-02** (Traefik, redis-shared, Postgres central, OpenBao, Vector) și **stacks-04/05** (rețea, VIP, plaje porturi). **ID-uri Cloudflare** (zone / record): în **CMDB**, nu în git — vezi [cloudflare-records-registry.md](./cloudflare-records-registry.md).
+
+| Runbook | Conținut |
+|---------|----------|
+| [incident-response.md](./incident-response.md) | SEV 1–3, escaladare, postmortem |
+| [change-deploy-rollback.md](./change-deploy-rollback.md) | PR, deploy, rollback, migrații |
+| [postgres-backup-restore.md](./postgres-backup-restore.md) | Postgres central `lxc-postgres-main` — legat de DR |
+| [redis-streams-retention-replay.md](./redis-streams-retention-replay.md) | Retenție stream, replay, DLQ |
+| [openbao-secrets-rotation.md](./openbao-secrets-rotation.md) | Rotație secrete OpenBao |
+| [mtu-mss-stacks-04.md](./mtu-mss-stacks-04.md) | Diagnostic MTU/MSS, trimitere la rețea auditată |
+| [traefik-reload.md](./traefik-reload.md) | Config `/opt/traefik`, reload, test curl |
+| [cloudflare-records-registry.md](./cloudflare-records-registry.md) | șablon registru DNS + reminder CMDB |
+
+## Secțiuni scurte (rezumat istoric)
+
+### Incident (SEV)
 
 | SEV | Criteriu | Escaladare |
 |-----|----------|------------|
@@ -8,44 +23,22 @@
 | 2 | Degradare majoră API/UI | On-call |
 | 3 | Bug limitat, workaround există | Ticket + urmărire |
 
-**Pași:** identificare blast radius → status page intern → rollback dacă deploy recent → postmortem pentru SEV1–2.
+Detaliu: [incident-response.md](./incident-response.md).
 
-## Change / deploy / rollback
+### Contacte
 
-1. Merge pe `main` după gates CI (`gate-pr-stacks-*`).
-2. Build artefacte pe worker cu memorie suficientă (evită job greu pe `lxc-ci-worker` fără split).
-3. Deploy pe orchestrator / LXC conform [deploy-topology-v2.md](../enterprise/deploy-topology-v2.md).
-4. Rollback: versiune anterioară container/proces + migrații DB doar cu script revers documentat.
+- **Nu** includem date de contact personale sau telefoane în repo — **CMDB** intern.
 
-## Postgres central
+### Legături enterprise
 
-- Backup: conform politicii DBA pe `lxc-postgres-main`.
-- Restore: testat trimestrial; înregistrare în [disaster-recovery.md](../enterprise/disaster-recovery.md).
+- Topologie: [deploy-topology-v2.md](../enterprise/deploy-topology-v2.md)
+- DR: [dr-rpo-rto.md](../enterprise/dr-rpo-rto.md), [disaster-recovery.md](../enterprise/disaster-recovery.md) (rezumat)
+- Rețea: [network-stacks-04-mtu-vip.md](../enterprise/network-stacks-04-mtu-vip.md)
+- Program ADR: [adr-program.md](../enterprise/adr-program.md)
+- Piramidă teste / CI: [testing-quality-gates.md](../enterprise/testing-quality-gates.md)
+- Fazare livrare UI: [ui-blueprint-phased-milestones.md](../enterprise/ui-blueprint-phased-milestones.md)
+- Porturi v2 (25xxx): [port-matrix-v2-25xxx.md](../enterprise/port-matrix-v2-25xxx.md)
 
-## Redis Streams
+### Mentenanță continuă (docs / ADR / runbook-uri)
 
-- Retenție: `MAXLEN` / trimming policy per stream; documentat per sinapsă.
-- Replay: din DLQ stream după remediere consumator.
-
-## OpenBao
-
-- Rotație secrete: playbook separat (tokens API, signing keys webhooks).
-- Acces: doar din rețea de încredere.
-
-## MTU / MSS (stacks-04)
-
-- vSwitch orchestrator: MTU `1450`; tune MSS pentru TCP dacă apar blackhole — vezi [network-stacks-04-mtu-vip.md](../enterprise/network-stacks-04-mtu-vip.md).
-
-## Traefik
-
-- Config: `/opt/traefik` pe orchestrator.
-- Reload: după validare fișier dinamic; test `curl -I --resolve v2.cerniq.app:443:127.0.0.1 https://v2.cerniq.app`.
-
-## Cloudflare
-
-- La crearea înregistrărilor DNS v2: păstrează **zone id** și **record id** în CMDB intern (nu în repo).
-- SSL: Full (strict) recomandat cu certificat valid la origine (Traefik ACME sau Origin CA).
-
-## Contacte
-
-- Definite în CMDB; acest repo nu conține PII contact.
+La schimbări majore de infrastructură (stacks-01…05), blueprint suite sau edge (Cloudflare, Traefik): actualizați **matricea** [compliance-stacks-01-05.md](../compliance-stacks-01-05.md), ADR-urile afectate și runbook-urile de mai sus; verificați [testing-quality-gates.md](../enterprise/testing-quality-gates.md) pentru comenzi de audit CI.

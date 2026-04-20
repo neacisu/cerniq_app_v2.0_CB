@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sys
 from pathlib import Path
 
@@ -67,6 +68,25 @@ def generate_synapse_stubs(rows: list[dict[str, str]], root: Path, dry_run: bool
         write_file(out, synapse_ts_stub(slug), dry_run)
 
 
+def gateway_manifest_derived_ts(name: str, orchestration: str) -> str:
+    return f"""/* auto-generated — nu edita manual; sursa: manifest.json */
+export const GATEWAY_MANIFEST_NAME = "{name}" as const;
+export const GATEWAY_ORCHESTRATION = "{orchestration}" as const;
+"""
+
+
+def generate_gateway_stubs(root: Path, dry_run: bool) -> None:
+    gw_root = root / "packages" / "gateways"
+    if not gw_root.is_dir():
+        return
+    for manifest_path in sorted(gw_root.glob("*/manifest.json")):
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        name = str(data.get("name") or manifest_path.parent.name).strip()
+        orch = str(data.get("orchestration") or "unspecified").strip()
+        out = manifest_path.parent / "src" / "generated" / "manifest-derived.ts"
+        write_file(out, gateway_manifest_derived_ts(name, orch), dry_run)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate stubs from NEURON/SYNAPSE CSV manifests.")
     parser.add_argument("--apply", action="store_true", help="Write files; default is dry-run.")
@@ -87,6 +107,8 @@ def main() -> int:
 
     if synapse_csv.is_file():
         generate_synapse_stubs(read_csv(synapse_csv), root, dry_run)
+
+    generate_gateway_stubs(root, dry_run)
 
     return 0
 

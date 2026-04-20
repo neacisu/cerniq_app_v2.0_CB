@@ -15,15 +15,17 @@
 | OLTP | Postgres central — host `lxc-postgres-main` (stacks-05 H8) |
 | Secrete | OpenBao |
 | Loguri | JSON stdout → Vector |
-| Metrici / trace | Prometheus / Tempo existente |
+| Metrici / trace | Prometheus / Tempo existente — worker-ii de proces (`apps/temporal-worker`, `apps/bullmq-worker`) expun **`/metrics`** pentru scrape intern (bind implicit localhost; vezi `METRICS_HOST` / `METRICS_PORT`) |
 
 ## Plajă porturi aplicație (dev/orchestrator)
 
-Conform planului: **25000** (web), **25010** (API), **25012** (admin). Bind local doar în mediu de dezvoltare controlat; în producție upstream-ul este rețeaua Traefik.
+Conform planului: **25000** (web), **25010** (API), **25012** (admin). Worker-i: **25091** (Temporal worker metrics, implicit), **25092** (BullMQ worker metrics, implicit). Bind local doar în mediu de dezvoltare controlat; în producție upstream-ul HTTP public este rețeaua Traefik, iar scrape-ul Prometheus se face din rețeaua observability.
 
-## Temporal / OTel
+## Temporal / BullMQ / OTel
 
-Worker-ii Temporal rulează pe host cu resurse adecvate (stacks-03); nu pe `lxc-ci-worker` pentru sarcini grele. Clientul Temporal din `apps/api` folosește endpoint-ul clusterului partajat (variabile de mediu).
+- **Temporal:** `TEMPORAL_ADDRESS` = cluster partajat (CMDB). Worker: `apps/temporal-worker` — resurse adecvate (stacks-03), nu `lxc-ci-worker` pentru sarcini grele.
+- **BullMQ:** `REDIS_URL` = **redis-shared** (orchestrator `10.0.0.2:6379` sau VIP `10.0.1.10:6379` — vezi `docs/enterprise/messaging-redis-bullmq-ops.md`). Proces worker: `apps/bullmq-worker`.
+- Client Temporal din `apps/api` folosește același endpoint de cluster (variabile de mediu).
 
 ## Fișiere
 

@@ -1,5 +1,8 @@
 import { Redis } from 'ioredis';
 
+/** BLOCK implicit XREADGROUP (ms) — override în `readOnce`. */
+export const DEFAULT_STREAM_BLOCK_MS = 5000;
+
 export interface StreamConsumerOptions {
   readonly streamKey: string;
   readonly group: string;
@@ -10,10 +13,24 @@ export interface StreamConsumerOptions {
 /**
  * Runtime sinapse: XREADGROUP + XACK. Folosește redis-shared (stacks-02).
  */
+export interface SynapseStreamConsumerOptions {
+  /** Test / injectare client (ex. ioredis-mock) — fără a deschide conexiune paralelă. */
+  readonly redis?: Redis;
+}
+
 export class SynapseStreamConsumer {
   private readonly redis: Redis;
 
-  constructor(connectionUrl?: string) {
+  /** Acces la client pentru XADD DLQ / contor retry (același redis-shared). */
+  getClient(): Redis {
+    return this.redis;
+  }
+
+  constructor(connectionUrl?: string, opts?: SynapseStreamConsumerOptions) {
+    if (opts?.redis) {
+      this.redis = opts.redis;
+      return;
+    }
     const url = connectionUrl ?? process.env.REDIS_URL;
     if (!url) {
       throw new Error('REDIS_URL required for SynapseStreamConsumer');
@@ -39,7 +56,7 @@ export class SynapseStreamConsumer {
       'COUNT',
       '10',
       'BLOCK',
-      String(opts.blockMs ?? 5000),
+      String(opts.blockMs ?? DEFAULT_STREAM_BLOCK_MS),
       'STREAMS',
       opts.streamKey,
       '>'

@@ -10,6 +10,10 @@ const baseURL = process.env['BASE_URL'] || 'http://localhost:3000';
  */
 export default defineConfig({
   ...nxE2EPreset(__filename, { testDir: './src' }),
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+  ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     baseURL,

@@ -1,44 +1,43 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import type { BrainSseEvent } from '../lib/use-brain-sse';
+import { useBrainSse } from '../lib/use-brain-sse';
 
-type SseState = 'idle' | 'open' | 'error';
+function formatLastEventPreview(last: BrainSseEvent | undefined): string {
+  if (last === undefined) {
+    return '—';
+  }
+  if (typeof last.type === 'string') {
+    return last.type;
+  }
+  return JSON.stringify(last).slice(0, 200);
+}
 
+/**
+ * Telemetrie tray — SSE real prin `/api/live` (proxy API sau mod local).
+ * @see docs/enterprise/ui-sse-optimistic-realtime.md
+ */
 export function BrainStatusPanel() {
-  const [sse, setSse] = useState<SseState>('idle');
-  const [lastEvent, setLastEvent] = useState<string>('');
-
-  useEffect(() => {
-    const es = new EventSource('/api/live');
-    es.onopen = () => setSse('open');
-    es.onerror = () => setSse('error');
-    es.onmessage = (ev) => {
-      setLastEvent(ev.data ?? '');
-    };
-    return () => es.close();
-  }, []);
+  const { events, connected } = useBrainSse({ url: '/api/live', throttleMs: 150 });
+  const last = events.at(-1);
+  const preview = formatLastEventPreview(last);
 
   return (
     <section
       data-testid="cerniq-brain-status"
-      style={{
-        margin: '1rem 0',
-        padding: '1rem',
-        border: '1px solid #ccc',
-        borderRadius: 8,
-        maxWidth: 560,
-      }}
+      className="rounded-lg border border-cb-border bg-cb-nav-hover/20 p-3 text-sm text-cb-ink"
     >
-      <h2 style={{ marginTop: 0 }}>Cerniq Cognitive Brain — status</h2>
-      <p data-testid="sse-state">
-        SSE: <strong>{sse}</strong>
+      <h2 className="mt-0 text-base font-semibold text-cb-ink">Cerniq Cognitive Brain — status</h2>
+      <p data-testid="sse-state" className="text-cb-muted">
+        SSE:{' '}
+        <strong className="text-cb-ink">{connected ? 'open' : 'reconnecting'}</strong>
       </p>
-      <p data-testid="sse-last" style={{ fontFamily: 'monospace', fontSize: 12 }}>
-        {lastEvent || '—'}
+      <p data-testid="sse-last" className="font-mono text-xs text-cb-muted">
+        {preview}
       </p>
-      <p style={{ fontSize: 12, color: '#444' }}>
-        Redis / Temporal: configurație prin variabile de mediu (stacks-02); fără datastore
-        duplicat în compose.
+      <p className="text-xs text-cb-muted">
+        Redis / Temporal: configurație prin variabile de mediu (stacks-02); fără datastore duplicat în
+        compose.
       </p>
     </section>
   );

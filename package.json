@@ -81,10 +81,14 @@
       "node-fetch": "^3.3.2"
     },
     "onlyBuiltDependencies": [
-      "@swc/core",
+      "@parcel/watcher",
+      "core-js-pure",
       "esbuild",
+      "msgpackr-extract",
       "nx",
-      "sharp"
+      "protobufjs",
+      "sharp",
+      "unrs-resolver"
     ]
   }
 }

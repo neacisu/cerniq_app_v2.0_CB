@@ -4,7 +4,10 @@ import '../app/global.css';
 const preview: Preview = {
   parameters: {
     layout: 'fullscreen',
-    a11y: { test: 'todo' },
+    /** addon-a11y + axe-core: raportări ca erori în Storybook (blueprint §17). */
+    a11y: {
+      test: 'error',
+    },
   },
 };
 

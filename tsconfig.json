@@ -32,6 +32,9 @@
     },
     {
       "path": "./apps/temporal-worker"
+    },
+    {
+      "path": "./apps/bullmq-worker"
     }
   ]
 }

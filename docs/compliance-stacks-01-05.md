@@ -1,30 +1,88 @@
-# Matrice conformitate stacks-01 … stacks-05
+# Matrice conformitate stacks-01 … stacks-05 + enforcement Cerniq
 
-**Scop:** fiecare regulă materială din `.cursor/rules/stacks-0x-*.mdc` (workspace `/opt/stacks/.cursor/rules/`) are cerință operațională, artefact de dovadă în `cerniq_app_v2_CB` sau procedură de audit, și status.
+**Scop:** mapare **exhaustivă** (pe fișiere și secțiuni materiale) din `.cursor/rules/stacks-0x-*.mdc` + `cerniq-todo-enterprise-gates.mdc` → cerință operațională → artefact dovadă în repo → **comandă audit** (reproducibilă) → **trimitere CMDB / matrice porturi** unde e cazul → status. Actualizare obligatorie la schimbare infrastructură sau reguli.
 
-**Audit rapid (repo):** `python3 tools/ci/run_gates.py` din rădăcina monorepo (include verificarea integrității [golden-thread-matrix.md](enterprise/golden-thread-matrix.md) prin `golden_thread_matrix_gate.py`).
+**Sursă canonică reguli (acest monorepo):** `cerniq_app_v2_CB/.cursor/rules/`.
 
-| ID | stacks | Cerință (rezumat) | Artefact / comandă audit | Status |
-|----|--------|-------------------|--------------------------|--------|
-| S01-A | 01 | Zero presupuneri; mapare înainte de cod | `docs/enterprise/*`, `docs/compliance-stacks-01-05.md` (acest fișier); fără IP inventat în doc-uri | OK doc — revizuire continuă |
-| S01-B | 01 | Enterprise-grade; fără mock în căi critice API | Gate `tools/ci/gates/no_critical_placeholders.py`; suprafață `apps/api/src/app/routes`, `plugins` | OK gate |
-| S01-C | 01 | Fără MVP „jumătate” pe căi IAM/tenant | `35-jwt-auth.ts` + `/v1/me` cu JWT HS256 sau dev flag explicit | În curs DB `auth_*` |
-| S02-A | 02 | Fără `postgres`/`redis`/`mail` în compose proiect | Gate `compose_no_duplicate_datastores.py` | OK repo |
-| S02-B | 02 | Ingress Traefik; fără publish haotic 80/443 | Gate `traefik_no_hazardous_compose_ports.py`; `infra/traefik/cerniq-v2.example.yml` | OK repo — deploy live în `/opt/traefik` = separat |
-| S02-C | 02 | Redis `redis-shared` pentru cozi/cache | `packages/messaging`, `docs/enterprise/orchestration-matrix.md` | În curs integrare runtime |
-| S02-D | 02 | PostgreSQL central (nu instanță proiect) | `packages/db-migrations`, `docs/enterprise/data-domain-erd.md` | În curs migrații aplicate pe H8 |
-| S02-E | 02 | OpenBao pentru secrete | `docs/enterprise/env-matrix-secrets.md`, `apps/api/.env.example` (fără secrete reale) | Doc + exemplu |
-| S02-F | 02 | Observabilitate: log JSON → Vector; traces → Tempo | `docs/enterprise/logging-audit-policy.md`, [ADR 0008](./adr/0008-observability-vector-tempo.md); API `pino`/Fastify JSON | În curs export OTel |
-| S02-G | 02 | Zitadel ignorat; IAM propriu | [ADR 0003](./adr/0003-iam-internal-postgres-jwt.md), plugin JWT | În curs tabele PG |
-| S02-H | 02 | Email doar Stalwart dacă e nevoie | ADR / lipsă mailer în compose | OK doc |
-| S03-A | 03 | Alocare workload pe host-uri reale (hz.*, LXC) | `docs/enterprise/deploy-topology-v2.md`, `temporal-standards-ops.md` | Doc |
-| S03-B | 03 | `lxc-ci-worker` 8 GiB — CI eficient | `.github/workflows/ci.yml` (ubuntu-latest, nx affected) | OK |
-| S04-A | 04 | Orchestrator `77.42.76.185` / `10.0.0.2`, MTU vSwitch 1450 | `docs/enterprise/network-stacks-04-mtu-vip.md` | Doc |
-| S04-B | 04 | VIP Redis `10.0.1.10:6379` → DNAT orchestrator | stacks-05 B1 citat în doc rețea | Doc |
-| S05-A | 05 | Postgres `lxc-postgres-main` — IP din audit (H8) | `data-domain-erd.md` | Doc |
-| S05-B | 05 | Plaje porturi 19/26/29/39/49/64/65 + **25xxx** rezervat v2 | `docs/enterprise/port-matrix-v2-25xxx.md` | Doc |
-| S05-C | 05 | LLM 49xxx, ACL | `packages/llm`, `llm-quotas-priority.md` | În curs |
+**Notă tensiune documente:** unde **stacks-02** menționează generic „Postgres 17”, **sursa de adevăr pentru engine pe `lxc-postgres-main`** este **stacks-05 §H8** (PostgreSQL **16** la audit 2026-04-18) — nu se inventează versiuni pe host.
 
-**Reguli de închidere:** status **OK** = dovadă în repo sau gate verde; **În curs** = ADR sau implementare rămasă; **Gap** = lipsă — nu se marchează „complet” în DoD până nu devine OK sau ADR Excluded.
+**Audit rapid (repo):** din rădăcina `cerniq_app_v2_CB/`:
 
-**Legătură plan:** [golden-thread-matrix.md](enterprise/golden-thread-matrix.md).
+```bash
+python3 tools/ci/run_gates.py
+```
+
+**Legături DoD / PR:** [definition-of-done.md](enterprise/definition-of-done.md); gate-uri plan → scripturi în secțiunea următoare.
+
+---
+
+## Mapare gate-uri PR (id plan → script CI)
+
+| ID plan | Script | Verificare |
+|---------|--------|------------|
+| `gate-pr-stacks-01-no-critical-placeholders` | `tools/ci/gates/no_critical_placeholders.py` | Fără stub/TODO în suprafață API (`apps/api/src/app/routes`, `plugins`) și pachete critice |
+| `gate-pr-stacks-02-no-duplicate-datastores` | `tools/ci/gates/compose_no_duplicate_datastores.py` | Fără `postgres` / `redis` / `mail` noi în compose proiect |
+| `gate-pr-stacks-02-traefik-ingress-only` | `tools/ci/gates/traefik_no_hazardous_compose_ports.py` | Fără publish haotic pentru față publică |
+
+---
+
+## Index pe fișier reguli (acoperire secțiuni)
+
+| Fișier | Secțiuni / zone mapate în matricea de mai jos |
+|--------|-----------------------------------------------|
+| [stacks-01-general-setup.mdc](../.cursor/rules/stacks-01-general-setup.mdc) | §1–§6 (CORE DIRECTIVES … Open-Source) |
+| [stacks-02-shared-services.mdc](../.cursor/rules/stacks-02-shared-services.mdc) | Servicii 1–7 (Traefik … Observabilitate) |
+| [stacks-03-infrastructure.mdc](../.cursor/rules/stacks-03-infrastructure.mdc) | Pool bare-metal, DB master, AI, CI worker, Cerniq LXC |
+| [stacks-04-network-topology.mdc](../.cursor/rules/stacks-04-network-topology.mdc) | Orchestrator, mesh hz.*, LXC, directive H. |
+| [stacks-05-port-matrix.mdc](../.cursor/rules/stacks-05-port-matrix.mdc) | A–I + H8 postgres; **CMDB live porturi** |
+| [cerniq-todo-enterprise-gates.mdc](../.cursor/rules/cerniq-todo-enterprise-gates.mdc) | Autoritate reguli, interdicții, `run_gates` + nx |
+
+---
+
+## Matrice detaliată: regulă → cerință → dovadă → audit → CMDB/stacks → status
+
+| ID | stacks | Ref. reguli (secțiune) | Cerință operațională | Artefact dovadă (path / doc) | Comandă audit (din rădăcina repo) | Captură CMDB / stacks |
+|----|--------|------------------------|------------------------|------------------------------|-----------------------------------|-------------------------|
+| S00-TODO | cerniq-todo | întreg | Toate todo-urile respectă DoD; fără „completed” fals | [cerniq-todo-enterprise-gates.mdc](../.cursor/rules/cerniq-todo-enterprise-gates.mdc), [definition-of-done.md](enterprise/definition-of-done.md) | `python3 tools/ci/run_gates.py` + `pnpm exec nx run-many -t lint,typecheck,test --all` (conform regulii) | — |
+| S01-§1 | 01 | stacks-01 §1 | Fără halucinații; validare fișier înainte de cod | Review PR + acest document | `rg -n "TODO\\|FIXME" apps/api/src/app/routes apps/api/src/app/plugins` (manual: fără TODO critic) | — |
+| S01-§2 | 01 | stacks-01 §2 | Edge cases și erori tratate pe căi API | Plugin `20-error-envelope.ts`, teste | `pnpm exec nx run api:test` | — |
+| S01-§3 | 01 | stacks-01 §3 | Fără MVP/ciuntit pe fluxuri expuse | Gate placeholders + JWT `/v1/me` | `python3 tools/ci/gates/no_critical_placeholders.py` | — |
+| S01-§5 | 01 | stacks-01 §4–§5 | Toolchain actuală (Apr 2026) | `package.json`, ADR 0001/0002/0009 | `python3 -c "import json;d=json.load(open('package.json'));print(d.get('packageManager'), d['dependencies'].get('next'))"` | — |
+| S01-§6 | 01 | stacks-01 §6 | Preferă self-hosted / servicii orchestrator | Doc deploy + fără datastore duplicat | `python3 tools/ci/gates/compose_no_duplicate_datastores.py` | stacks-05 A (orchestrator) |
+| S02-1 | 02 | stacks-02 §1 Traefik | Ingress Traefik; fără publish haotic | Gate Traefik + exemplu labels | `python3 tools/ci/gates/traefik_no_hazardous_compose_ports.py` | stacks-05 A1 `80/443` Traefik |
+| S02-2 | 02 | stacks-02 §2 IAM | IAM propriu; Zitadel deprecated | ADR 0003, `35-jwt-auth.ts` | `rg -n "35-jwt-auth" apps/api/src/app/plugins` | — |
+| S02-3 | 02 | stacks-02 §3 OpenBao | Secrete via OpenBao / inject | [env-matrix-secrets.md](enterprise/env-matrix-secrets.md) | `test -f apps/api/.env.example && rg -n "OpenBao|VAULT" docs/enterprise/env-matrix-secrets.md` | stacks-05 orchestrator `8200/8201` |
+| S02-4 | 02 | stacks-02 §4 Redis | **redis-shared** 8.x; cozi/cache | `packages/messaging`, BullMQ | `rg -n "REDIS_URL|redis-shared" docs/enterprise packages/messaging` | stacks-05 A2 `6379` → redis-shared |
+| S02-5 | 02 | stacks-02 §5 Postgres | DB central; nu Postgres proiect | `packages/db-migrations`, ERD | `ls packages/db-migrations/sql 2>/dev/null; python3 tools/ci/gates/compose_no_duplicate_datastores.py` | **stacks-05 §H8** `10.0.1.107:5432` **PostgreSQL 16** |
+| S02-6 | 02 | stacks-02 §6 Stalwart | Mail doar prin Stalwart | Fără mailer în compose | `python3 tools/ci/gates/compose_no_duplicate_datastores.py` | stacks-05 A1 porturi SMTP/IMAP stalwart |
+| S02-7 | 02 | stacks-02 §7 Observabilitate | JSON → **Vector**; trace → **Tempo**; metrici | ADR 0008, `apps-api-fastify-core.md`, `/metrics` | `rg -n "traceparent|trace_id" apps/api/src; pnpm exec nx run api:test` | stacks-05 A5 `vector`, `tempo` |
+| S03-HW | 03 | stacks-03 §1 Heavyweight | Workload mare → hz.113/hz.164 etc. | [deploy-topology-v2.md](enterprise/deploy-topology-v2.md) | Review la task deploy worker | CMDB: [stacks-03](../.cursor/rules/stacks-03-infrastructure.mdc) §1 |
+| S03-DB | 03 | stacks-03 §2 | `lxc-postgres-main` = master | [data-domain-erd.md](enterprise/data-domain-erd.md) | `rg -n "10.0.1.107|postgres-main" docs/enterprise/data-domain-erd.md` | stacks-05 H8 |
+| S03-AI | 03 | stacks-03 §3 | LLM guard subțire; fără modele uriașe pe guard | [llm-quotas-priority.md](enterprise/llm-quotas-priority.md) | `rg -n "49004|LLM_GUARD" packages/llm docs/enterprise` | stacks-03 §3 `lxc-llm-guard` |
+| S03-CI | 03 | stacks-03 §4 | `lxc-ci-worker` **8 GiB** — CI memorie limitată | `.github/workflows/ci.yml` `NODE_OPTIONS` | `rg -n "NODE_OPTIONS|node-version" .github/workflows/ci.yml` | stacks-03 §4 |
+| S03-CQ | 03 | stacks-03 §5 | Cerniq prod/staging LXC — nu atinge alte containere | Doc topologie | `rg -n "lxc-prod-cerniq|lxc-staging-cerniq" docs/enterprise/deploy-topology-v2.md` | stacks-04 C6–C7 |
+| S04-ORCH | 04 | stacks-04 §A | Orchestrator `77.42.76.185` / `10.0.0.2` | [c4-deployment-views.md](enterprise/c4-deployment-views.md) | `rg -n "77.42.76.185|10.0.0.2" docs/enterprise/c4-deployment-views.md` | stacks-04 §A |
+| S04-VIP | 04 | stacks-04 §B9 / stacks-05 B | VIP `10.0.1.10` Traefik/Redis/LLM ACL | [port-matrix-v2-25xxx.md](enterprise/port-matrix-v2-25xxx.md), [network-stacks-04-mtu-vip.md](enterprise/network-stacks-04-mtu-vip.md) | `rg -n "10.0.1.10" docs/enterprise/port-matrix-v2-25xxx.md` | stacks-05 B1; stacks-04 B9 |
+| S04-MTU | 04 | stacks-04 H (directive) | MTU vSwitch / MSS | [network-stacks-04-mtu-vip.md](enterprise/network-stacks-04-mtu-vip.md), runbook MTU | `rg -n "MTU|1360|1450" docs/enterprise/network-stacks-04-mtu-vip.md docs/runbooks/mtu-mss-stacks-04.md` | stacks-04 final H |
+| S05-PG | 05 | stacks-05 §H8 | Postgres **16** pe H8 | ERD + matrice | `rg -n "PostgreSQL 16|10.0.1.107" .cursor/rules/stacks-05-port-matrix.mdc` | **§H8** |
+| S05-PL | 05 | stacks-05 + doc v2 | Plaje **25xxx** / VIP Cerniq | [port-matrix-v2-25xxx.md](enterprise/port-matrix-v2-25xxx.md) | `rg -n "25xxx|25010" docs/enterprise/port-matrix-v2-25xxx.md docs/enterprise/deploy-topology-v2.md` | stacks-05 B2–B3 |
+| S05-LLM | 05 | stacks-05 LLM VIP | **49xxx** guardrails / inferență | [llm-quotas-priority.md](enterprise/llm-quotas-priority.md) | `rg -n "49xxx|49004" docs/enterprise/llm-quotas-priority.md` | stacks-04 B9 ACL |
+| S00-ADR | 01 | stacks-01 + program | Program ADR + tensiuni research | [adr-program.md](enterprise/adr-program.md), **ADR-0010** | `ls docs/adr/0010*.md` | — |
+| S00-RB | 02 | stacks-02 runbooks | Runbook-uri operaționale | [runbooks/README.md](../runbooks/README.md) | `test -f docs/runbooks/incident-response.md` | — |
+| S00-GT | 01 | golden thread | Trasabilitate cerințe | [golden-thread-matrix.md](enterprise/golden-thread-matrix.md) | `python3 tools/ci/gates/golden_thread_matrix_gate.py` | — |
+
+**Status:** **OK** = dovadă + gate verde sau document la zi; **În curs** = implementare rămasă; **Gap** = lipsă până la ADR sau livrare.
+
+**Legătură:** [golden-thread-matrix.md](enterprise/golden-thread-matrix.md). **Mitigare versiuni research §6:** [backend-research-versions-matrix.md](enterprise/backend-research-versions-matrix.md), [ADR-0010](../adr/0010-research-backend-section6-version-deltas.md).
+
+---
+
+## Plan unificat — batch `224–244` (impl-* + ui-ms01 / ui-ms02)
+
+**Dovadă agregată:** [plan-batch-224-244-evidence.md](enterprise/plan-batch-224-244-evidence.md) — mapare ID todo → path → comandă audit; aliniat `cerniq-todo-enterprise-gates.mdc` (fără „completed” fără cod + teste + gate verde).
+
+---
+
+## Plan unificat — batch `269–292` (capitole suite UI)
+
+**Dovadă agregată:** [plan-batch-269-292-evidence.md](enterprise/plan-batch-269-292-evidence.md) — Home/Brain panouri, `suite-chapter-copy`, nav `NEXT_PUBLIC_CERNIQ_DEV_CHAPTERS`, teste `suite-chapter-copy.spec.ts` / `chapter-permissions.spec.ts`.

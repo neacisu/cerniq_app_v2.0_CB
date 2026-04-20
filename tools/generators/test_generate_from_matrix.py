@@ -31,6 +31,13 @@ class TestNeuronTsStub(unittest.TestCase):
         self.assertIn("neuron_a_b", g.neuron_ts_stub("neuron-a-b"))
 
 
+class TestGatewayDerivedTs(unittest.TestCase):
+    def test_contains_const(self) -> None:
+        t = g.gateway_manifest_derived_ts("gw-a", "temporal")
+        self.assertIn("GATEWAY_MANIFEST_NAME", t)
+        self.assertIn("temporal", t)
+
+
 class TestGenerateNeuronStubsDryRun(unittest.TestCase):
     def test_skips_empty_rows(self) -> None:
         buf = io.StringIO()

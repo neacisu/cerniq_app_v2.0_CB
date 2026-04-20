@@ -45,6 +45,8 @@
     "components/**/*.tsx",
     "lib/**/*.ts",
     "lib/**/*.tsx",
+    "jest-axe.d.ts",
+    "jest.setup.ts",
     "next-env.d.ts",
     ".next/types/**/*.ts"
   ],

@@ -2,6 +2,8 @@
 
 Format: `NNNN-titlu-slug.md`. Status: Proposed | Accepted | Deprecated | Superseded.
 
+**Program ADR (guvernanță, mitigare surse, revizuire):** [docs/enterprise/adr-program.md](../enterprise/adr-program.md).
+
 ## Index
 
 | ADR | Titlu | Status |
@@ -15,5 +17,8 @@ Format: `NNNN-titlu-slug.md`. Status: Proposed | Accepted | Deprecated | Superse
 | [0007](./0007-langgraph-placement.md) | Plasare LangGraph vs Temporal (subordonat 0004) | Accepted |
 | [0008](./0008-observability-vector-tempo.md) | Vector + Tempo; fără Loki paralel | Accepted |
 | [0009](./0009-pinned-ui-versions-strategy.md) | Strategie pin UI vs @nx/next | Accepted |
+| [0010](./0010-research-backend-section6-version-deltas.md) | Diferențe research §6 vs CMDB/repo (D1–D16) | Accepted |
 
 **Revizuire:** la schimbare stacks-01…05 sau blueprint suite, actualizează ADR afectat + [compliance-stacks-01-05.md](../compliance-stacks-01-05.md).
+
+**Mentenanță continuă (onboarding / matrice / edge):** după modificări majore, reconciliază cu [docs/enterprise/](../enterprise/) (inclusiv [testing-quality-gates.md](../enterprise/testing-quality-gates.md), [ui-blueprint-phased-milestones.md](../enterprise/ui-blueprint-phased-milestones.md)), runbook-urile din [docs/runbooks/](../runbooks/) și înregistrările DNS/TLS (fără ID-uri secrete în git — CMDB).

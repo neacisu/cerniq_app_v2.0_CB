@@ -5,10 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "jest"
+  },
+  "nx": {
+    "tags": ["scope:temporal", "type:app"]
   },
   "dependencies": {
     "@temporalio/worker": "^1.16.0",
-    "@temporalio/workflow": "^1.16.0"
+    "@temporalio/workflow": "^1.16.0",
+    "prom-client": "^15.1.3"
   }
 }

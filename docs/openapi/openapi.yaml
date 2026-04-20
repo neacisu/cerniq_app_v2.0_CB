@@ -2,10 +2,12 @@ openapi: 3.1.0
 info:
   title: Cerniq Cognitive Brain v2 API
   version: 1.0.0
-  description: Contract REST + convenții SSE. Ingress via Traefik.
+  description: |
+    Contract REST + convenții SSE. Ingress HTTPS via Traefik (stacks-02) pe orchestrator.
+    Căi efective în `apps/api` — acest fișier trebuie păstrat sincron la schimbarea rutelor.
 servers:
-  - url: https://api.v2.cerniq.app/v1
-    description: Producție (Traefik → Fastify :25010)
+  - url: https://api.v2.cerniq.app
+    description: Producție (Cloudflare opțional → Traefik :443 → upstream :25010)
 paths:
   /health:
     get:
@@ -24,17 +26,54 @@ paths:
                     example: ok
   /ready:
     get:
-      summary: Readiness (DB/Redis opțional)
+      summary: Readiness (extensibil DB/Redis)
       operationId: ready
       responses:
         '200':
           description: Gata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
         '503':
           description: Nepregătit
-  /cognitive/status:
+  /metrics:
+    get:
+      summary: Prometheus metrics (scraping intern / rețea observability)
+      operationId: metrics
+      responses:
+        '200':
+          description: text/plain Prometheus
+  /v1/me:
+    get:
+      summary: Profil utilizator autentificat (JWT / dev tenant header)
+      operationId: me
+      parameters:
+        - name: X-Tenant-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Profil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeProfile'
+        '401':
+          description: Neautentificat
+        '403':
+          description: Tenant lipsă sau nepotrivire JWT
+  /v1/cognitive/hello:
     get:
       summary: Status sintetic Brain (demo)
-      operationId: cognitiveStatus
+      operationId: cognitiveHello
       parameters:
         - name: X-Request-Id
           in: header
@@ -46,10 +85,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CognitiveStatus'
-  /cognitive/stream:
+                $ref: '#/components/schemas/CognitiveHello'
+  /v1/cognitive/stream:
     get:
-      summary: SSE telemetrie
+      summary: SSE telemetrie Brain
       operationId: cognitiveStream
       responses:
         '200':
@@ -58,7 +97,31 @@ paths:
             text/event-stream:
               schema:
                 type: string
-  /webhooks/inbound:
+  /v1/llm/health:
+    get:
+      summary: Health rutare LLM + verificare cotă (fără apel model)
+      operationId: llmHealth
+      parameters:
+        - name: X-Tenant-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Endpoint guard rezolvat + cotă OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmHealth'
+        '400':
+          description: Tenant lipsă
+        '429':
+          description: Cotă LLM depășită
+        '502':
+          description: Upstream indisponibil
+  /v1/webhooks/inbound:
     post:
       summary: Webhook inbound (HMAC + idempotency)
       operationId: webhookInbound
@@ -68,7 +131,8 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
+            minLength: 8
+            description: Recomandat UUID; minim 8 caractere (validare runtime)
         - name: X-Cerniq-Signature
           in: header
           required: true
@@ -77,9 +141,20 @@ paths:
       responses:
         '202':
           description: Acceptat
+        '400':
+          description: Idempotency-Key invalid
+        '401':
+          description: Semnătură invalidă
+        '503':
+          description: Secret webhook neconfigurat
         '409':
           description: Idempotency replay
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     ErrorEnvelope:
       type: object
@@ -98,12 +173,65 @@ components:
             details:
               type: array
               items: {}
-    CognitiveStatus:
+    CognitiveHello:
       type: object
       properties:
-        gateway:
+        message:
           type: string
-        neuron:
+        service:
           type: string
-        synapse:
+    MeProfile:
+      type: object
+      properties:
+        tenant_id:
           type: string
+        subject:
+          type: string
+        chapters:
+          type: array
+          items:
+            type: string
+    LlmHealth:
+      type: object
+      properties:
+        guard_endpoint:
+          type: string
+        tenant_id:
+          type: string
+        quota:
+          type: string
+    BrainCrossEntityRefs:
+      type: object
+      description: |
+        ID-uri încrucișate business ↔ Brain (blueprint §25). UI le propagă ca query params pe rutele `/brain/*`;
+        backend poate include același set în payload-uri JSON pentru deep-link deterministe.
+      properties:
+        trace_id:
+          type: string
+          description: Identificator trace (`?trace=`).
+        gateway_id:
+          type: string
+          description: Identificator gateway (`?gateway=`).
+        neuron_id:
+          type: string
+          description: Identificator neuron manifest (`?neuron=`).
+        synapse_id:
+          type: string
+          description: Identificator sinapsă (`?synapse=`).
+        workflow_run_id:
+          type: string
+          description: Identificator run workflow (opțional; extensie contract).
+        tenant_id:
+          type: string
+          format: uuid
+      additionalProperties: false
+    BrainOverviewUiQuery:
+      type: object
+      description: |
+        Parametri suplimentari pentru `/brain/overview` — focalizare UI.
+      properties:
+        cerniq_focus:
+          type: string
+          enum: [neuron_explanation]
+          description: Deschide panoul de explicație neuron (deep-link din Analytics / CRM / Sales).
+      additionalProperties: false

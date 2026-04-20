@@ -1,10 +1,35 @@
 @import 'tailwindcss';
 
-@theme {
+/* Tokeni OKLCH — sursă variabile CSS; `.dark` pe `<html>` (ThemeToggle). */
+:root {
+  --cb-surface: oklch(0.99 0.006 250);
+  --cb-ink: oklch(0.2 0.025 250);
+  --cb-muted: oklch(0.45 0.03 250);
+  --cb-accent: oklch(0.55 0.16 250);
+  --cb-border: oklch(0.88 0.02 250);
+  --cb-nav-active: oklch(0.92 0.04 250);
+  --cb-nav-hover: oklch(0.96 0.02 250);
+}
+
+.dark {
+  --cb-surface: oklch(0.13 0.02 250);
+  --cb-ink: oklch(0.96 0.015 250);
+  --cb-muted: oklch(0.62 0.03 250);
+  --cb-accent: oklch(0.72 0.14 250);
+  --cb-border: oklch(0.28 0.03 250);
+  --cb-nav-active: oklch(0.28 0.06 250);
+  --cb-nav-hover: oklch(0.22 0.04 250);
+}
+
+@theme inline {
   --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --color-cb-surface: oklch(0.98 0.01 250);
-  --color-cb-ink: oklch(0.2 0.02 250);
-  --color-cb-accent: oklch(0.72 0.14 250);
+  --color-cb-surface: var(--cb-surface);
+  --color-cb-ink: var(--cb-ink);
+  --color-cb-muted: var(--cb-muted);
+  --color-cb-accent: var(--cb-accent);
+  --color-cb-border: var(--cb-border);
+  --color-cb-nav-active: var(--cb-nav-active);
+  --color-cb-nav-hover: var(--cb-nav-hover);
   --spacing-topbar: 4.5rem;
 }
 
@@ -24,5 +49,5 @@ body {
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-100 antialiased;
+  @apply antialiased bg-cb-surface text-cb-ink;
 }

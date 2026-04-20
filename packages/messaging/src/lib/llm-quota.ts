@@ -2,14 +2,27 @@ import { Redis } from 'ioredis';
 
 const KEY = (tenantId: string, period: string) => `cerniq:llm:quota:${tenantId}:${period}`;
 
+export type LlmQuotaGuardOptions = Readonly<{
+  /** Client Redis injectat (ex. `ioredis-mock` în teste) — evită rețea reală. */
+  redis?: Redis;
+}>;
+
 export class LlmQuotaGuard {
   private readonly redis: Redis;
   private readonly maxTokens: number;
 
-  constructor(maxTokensPerPeriod: number, connectionUrl?: string) {
-    const url = connectionUrl ?? process.env.REDIS_URL;
-    if (!url) throw new Error('REDIS_URL required for LlmQuotaGuard');
-    this.redis = new Redis(url, { maxRetriesPerRequest: null });
+  constructor(
+    maxTokensPerPeriod: number,
+    connectionUrl?: string,
+    options?: LlmQuotaGuardOptions,
+  ) {
+    if (options?.redis) {
+      this.redis = options.redis;
+    } else {
+      const url = connectionUrl ?? process.env.REDIS_URL;
+      if (!url) throw new Error('REDIS_URL required for LlmQuotaGuard');
+      this.redis = new Redis(url, { maxRetriesPerRequest: null });
+    }
     this.maxTokens = maxTokensPerPeriod;
   }
 

@@ -1,9 +1,18 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
+import {
+  bodySha256,
+  getWebhookRedis,
+  webhookIdempotencyOutcome,
+  webhookRateLimitOk,
+} from '../../../lib/webhook-inbound-redis.js';
 
-const plugin: FastifyPluginAsync = async (fastify) => {
-  fastify.post('/v1/webhooks/inbound', async (request, reply) => {
+/**
+ * Fără `fastify-plugin`: AutoLoad aplică prefix `/v1`; `fp()` ridica rutele la root și
+ * rupea URL-ul public `/v1/webhooks/inbound` (devenea `/webhooks/inbound`).
+ */
+const webhooksInbound: FastifyPluginAsync = async (fastify) => {
+  fastify.post('/webhooks/inbound', async (request, reply) => {
     const idem = request.headers['idempotency-key'];
     if (typeof idem !== 'string' || idem.length < 8) {
       return reply.status(400).send({
@@ -44,8 +53,45 @@ const plugin: FastifyPluginAsync = async (fastify) => {
         },
       });
     }
+
+    const redis = getWebhookRedis();
+    if (redis) {
+      const clientKey =
+        (typeof request.headers['x-forwarded-for'] === 'string'
+          ? request.headers['x-forwarded-for'].split(',')[0]?.trim()
+          : null) ||
+        request.socket?.remoteAddress ||
+        'unknown';
+      const rlOk = await webhookRateLimitOk(redis, clientKey);
+      if (!rlOk) {
+        return reply.status(429).send({
+          error: {
+            code: 'WEBHOOK_RATE_LIMIT',
+            message: 'Too many webhook requests',
+            request_id: request.requestId,
+          },
+        });
+      }
+      const hash = bodySha256(rawBody);
+      const outcome = await webhookIdempotencyOutcome(redis, idem, hash);
+      if (outcome === 'conflict') {
+        return reply.status(409).send({
+          error: {
+            code: 'IDEMPOTENCY_CONFLICT',
+            message: 'Idempotency-Key reused with different body',
+            request_id: request.requestId,
+          },
+        });
+      }
+      if (outcome === 'replay') {
+        return reply
+          .status(202)
+          .send({ accepted: true, idempotency_key: idem, replay: true });
+      }
+    }
+
     return reply.status(202).send({ accepted: true, idempotency_key: idem });
   });
 };
 
-export default fp(plugin, { name: 'webhooks-inbound' });
+export default webhooksInbound;

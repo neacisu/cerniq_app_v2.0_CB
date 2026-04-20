@@ -1,4 +1,8 @@
-import { assertChapterAccess, CHAPTER_PERMISSIONS } from './rbac-chapters.js';
+import {
+  assertChapterAccess,
+  CHAPTER_PERMISSIONS,
+  chaptersResolvedFromJwt,
+} from './rbac-chapters.js';
 
 describe('rbac-chapters', () => {
   it('superadmin trece', () => {
@@ -12,5 +16,27 @@ describe('rbac-chapters', () => {
 
   it('lista capitole este exhaustivă ca tip', () => {
     expect(CHAPTER_PERMISSIONS.length).toBe(10);
+  });
+
+  it('chaptersResolvedFromJwt — superadmin primește toate capitolele', () => {
+    const ch = chaptersResolvedFromJwt(
+      { sub: 'u', roles: ['superadmin'] },
+      { devTenantOnly: false },
+    );
+    expect(ch.length).toBe(10);
+  });
+
+  it('chaptersResolvedFromJwt — roluri explicite chapter:*', () => {
+    const ch = chaptersResolvedFromJwt(
+      { sub: 'u', roles: ['chapter:admin', 'chapter:brain'] },
+      { devTenantOnly: false },
+    );
+    expect(ch).toEqual(expect.arrayContaining(['chapter:admin', 'chapter:brain']));
+    expect(ch.length).toBe(2);
+  });
+
+  it('chaptersResolvedFromJwt — fallback când lipsește rolul', () => {
+    const ch = chaptersResolvedFromJwt({ sub: 'u' }, { devTenantOnly: false });
+    expect(ch).toEqual(['chapter:home', 'chapter:brain']);
   });
 });

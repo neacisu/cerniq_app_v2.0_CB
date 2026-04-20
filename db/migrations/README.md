@@ -1,9 +1,5 @@
-# Migrații Postgres
+# Migrații SQL — sursă canonică
 
-Fișiere versionate pentru **`postgres-main`** (central). Nu rulați împotriva unui Postgres local din compose-ul proiectului — vezi stacks-02.
+Fișierele versionate pentru **Cerniq v2** trăiesc în **`packages/db-migrations/sql/`** (convenție Flyway `V*__*.sql`).
 
-Ordine:
-
-1. `V001__brain_schemas.sql` — scheme `brain_*` + `business`, tabel minimal audit.
-
-Instrumente recomandate: migrații manuale orchestrate sau Flyway/Liquibase — alegeți în ADR.
+Directorul `db/migrations/` din rădăcină este păstrat doar ca pointer istoric; **nu** adăugați migrații duplicate aici — vezi `data-domain-erd.md` și `data-model-erd-migrations.md`.

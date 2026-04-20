@@ -1,5 +1,6 @@
 # Fragment de referință Traefik (fișier dinamic sau labels) — NU înlocuiește /opt/traefik live.
-# Host: orchestrator 77.42.76.185 :443 (stacks-02). Upstream: 127.0.0.1:25000 / :25010 / :25012
+# Host: orchestrator 77.42.76.185 :443 (stacks-02). Upstream variantă A: 127.0.0.1:25xxx
+# Varianta B (LXC): înlocuiți URL-urile cu http://10.0.1.110:64000 etc. conform deploy-topology-v2.md + CMDB.
 
 http:
   routers:
@@ -15,6 +16,12 @@ http:
       entryPoints:
         - websecure
       tls: {}
+    cerniq-v2-admin:
+      rule: Host(`admin.v2.cerniq.app`)
+      service: cerniq-v2-admin-svc
+      entryPoints:
+        - websecure
+      tls: {}
   services:
     cerniq-v2-web-svc:
       loadBalancer:
@@ -24,3 +31,7 @@ http:
       loadBalancer:
         servers:
           - url: http://127.0.0.1:25010
+    cerniq-v2-admin-svc:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:25012

@@ -1,6 +1,6 @@
 # Generatoare manifest
 
-- `generate_from_matrix.py` — citește `packages/manifests/*.csv` și poate emite fișiere `generated/stub.ts` sub pachetele existente.
+- `generate_from_matrix.py` — citește `packages/manifests/*.csv` și `packages/gateways/*/manifest.json`; emite `generated/stub.ts` (neurons/synapses) și `generated/manifest-derived.ts` (gateways).
 
 Rulare:
 

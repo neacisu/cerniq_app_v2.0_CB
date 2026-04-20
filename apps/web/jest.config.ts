@@ -8,6 +8,7 @@ const createJestConfig = nextJest({
 const config: Config = {
   displayName: 'web',
   preset: '../../jest.preset.js',
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   /** Next 15 + React 19: uneori rămân handle-uri async în jsdom fără leak real. */
   forceExit: true,
   transform: {

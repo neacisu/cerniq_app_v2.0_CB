@@ -1,13 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { Registry, Counter } from 'prom-client';
-
-const registry = new Registry();
-const httpRequests = new Counter({
-  name: 'cerniq_http_requests_total',
-  help: 'HTTP requests',
-  labelNames: ['method', 'status'],
-  registers: [registry],
-});
+import { cerniqRegistry, httpRequests } from '../lib/cerniq-metrics';
 
 const metrics: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('onResponse', async (request, reply) => {
@@ -18,8 +10,8 @@ const metrics: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get('/metrics', async (_, reply) => {
-    reply.header('Content-Type', registry.contentType);
-    return reply.send(await registry.metrics());
+    reply.header('Content-Type', cerniqRegistry.contentType);
+    return reply.send(await cerniqRegistry.metrics());
   });
 };
 

@@ -22,3 +22,15 @@
 ## Post-config
 
 - Verificare stacks-01: `curl -vI https://v2.cerniq.app` de pe rețea externă.
+
+## Limitare token API (DNS-only)
+
+Dacă tokenul API (Bearer) folosit la Traefik ACME are **doar** permisiuni DNS, apelurile `GET/PATCH /zones/.../settings/ssl` returnează **403** (`9109`).
+
+**Variante:**
+
+1. **Global API Key** + `X-Auth-Email` / `X-Auth-Key` (cont Cloudflare) — pot modifica setările zonei (`ssl` → `strict`, `min_tls_version` → `1.2`, `always_use_https` → `on`), dacă politica de securitate permite (cheia e puternică — păstrați-o doar în OpenBao / `.env` neversionat).
+2. **API Token** cu permisiuni **Zone → SSL and Certificates** (sau Zone → Edit) pentru zona respectivă.
+3. **Dashboard** — SSL/TLS → mod de criptare **Full (strict)**.
+
+> Nu comitați chei în repository; folosiți variabile de mediu sau OpenBao.
