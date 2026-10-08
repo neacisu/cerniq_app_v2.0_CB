@@ -1,0 +1,18 @@
+# firme.cerniq.app → nginx (firme-web) pe gateway-ul traefik_default. TLS prin Cloudflare DNS-01.
+http:
+  routers:
+    firme-web:
+      rule: Host(`firme.cerniq.app`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: cloudflare
+      service: firme-web
+      middlewares:
+        - security-headers
+  services:
+    firme-web:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://172.18.0.1:4187
