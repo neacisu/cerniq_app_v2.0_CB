@@ -5,18 +5,18 @@ import { collapse } from './format';
  * Codurile I* își schimbă sensul între ani și formulare (vezi raportul, secțiunea 8).
  * Metricile cheie sunt de aceea identificate după denumirea din dicționarul anului, nu după cod.
  */
-export interface MetricDef { id: string; eticheta: string; potrivire: string; tip: 'lei' | 'numar'; ton: 'neutru' | 'pozitiv' | 'negativ' }
+export interface MetricDef { id: string; eticheta: string; potriviri: string[]; tip: 'lei' | 'numar'; ton: 'neutru' | 'pozitiv' | 'negativ' }
 
 export const METRICI: MetricDef[] = [
-  { id: 'ca', eticheta: 'Cifra de afaceri netă', potrivire: 'cifra de afaceri neta', tip: 'lei', ton: 'neutru' },
-  { id: 'venituri', eticheta: 'Venituri totale', potrivire: 'venituri totale', tip: 'lei', ton: 'pozitiv' },
-  { id: 'cheltuieli', eticheta: 'Cheltuieli totale', potrivire: 'cheltuieli totale', tip: 'lei', ton: 'negativ' },
-  { id: 'profit-brut', eticheta: 'Profit brut', potrivire: 'profit brut', tip: 'lei', ton: 'pozitiv' },
-  { id: 'profit', eticheta: 'Profit net', potrivire: 'profit net', tip: 'lei', ton: 'pozitiv' },
-  { id: 'pierdere', eticheta: 'Pierdere netă', potrivire: 'pierdere neta', tip: 'lei', ton: 'negativ' },
-  { id: 'salariati', eticheta: 'Număr mediu de salariați', potrivire: 'numar mediu de salariati', tip: 'numar', ton: 'neutru' },
-  { id: 'capitaluri', eticheta: 'Capitaluri totale', potrivire: 'capitaluri - total', tip: 'lei', ton: 'neutru' },
-  { id: 'datorii', eticheta: 'Datorii', potrivire: 'datorii', tip: 'lei', ton: 'negativ' },
+  { id: 'ca', eticheta: 'Cifra de afaceri netă', potriviri: ['cifra de afaceri neta'], tip: 'lei', ton: 'neutru' },
+  { id: 'venituri', eticheta: 'Venituri totale', potriviri: ['venituri totale'], tip: 'lei', ton: 'pozitiv' },
+  { id: 'cheltuieli', eticheta: 'Cheltuieli totale', potriviri: ['cheltuieli totale'], tip: 'lei', ton: 'negativ' },
+  { id: 'profit-brut', eticheta: 'Profit brut', potriviri: ['profit brut', 'profitul brut'], tip: 'lei', ton: 'pozitiv' },
+  { id: 'profit', eticheta: 'Profit net', potriviri: ['profit net', 'profitul net'], tip: 'lei', ton: 'pozitiv' },
+  { id: 'pierdere', eticheta: 'Pierdere netă', potriviri: ['pierdere neta'], tip: 'lei', ton: 'negativ' },
+  { id: 'salariati', eticheta: 'Număr mediu de salariați', potriviri: ['numar mediu de salariati'], tip: 'numar', ton: 'neutru' },
+  { id: 'capitaluri', eticheta: 'Capitaluri totale', potriviri: ['capitaluri - total'], tip: 'lei', ton: 'neutru' },
+  { id: 'datorii', eticheta: 'Datorii', potriviri: ['datorii'], tip: 'lei', ton: 'negativ' },
 ];
 export const metricById = (id: string): MetricDef => METRICI.find((m) => m.id === id) ?? METRICI[0]!;
 
@@ -24,21 +24,37 @@ export function norm(s: string): string {
   return collapse(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-/** Caută un indicator după denumirea normalizată (potrivire exactă sau prefix). */
-export function findMetric(formulare: FormularBilant[], metric: MetricDef): Indicator | undefined {
+/** Denumirea fără sufixul „, din care:”, ca „CAPITALURI - TOTAL din care:” și „…, din care:” să fie același indicator. */
+export function baseName(s: string): string { return norm(s).replace(/,?\s*din care:?$/, ''); }
+
+/**
+ * Caută un indicator după denumire, doar prin potrivire exactă (fără prefix): formularele ONG și IFN au etichete
+ * precum „Venituri totale - prevederi anuale” sau „Datorii financiare…”, care nu sunt aceeași mărime.
+ * Cu `formular` dat, se caută numai în depunerea acelui formular.
+ */
+export function findMetric(formulare: FormularBilant[], metric: MetricDef, formular?: string): Indicator | undefined {
   for (const f of formulare) {
-    const exact = f.indicatori.find((i) => norm(i.denumire) === metric.potrivire);
-    if (exact) return exact;
-  }
-  for (const f of formulare) {
-    const pref = f.indicatori.find((i) => norm(i.denumire).startsWith(metric.potrivire));
-    if (pref) return pref;
+    if (formular && f.formular !== formular) continue;
+    const hit = f.indicatori.find((i) => metric.potriviri.includes(baseName(i.denumire)));
+    if (hit) return hit;
   }
   return undefined;
 }
 
-export function seriesFor(ani: { an: number; formulare: FormularBilant[] }[], metric: MetricDef): { an: number; valoare: number | null }[] {
-  return [...ani].sort((a, b) => a.an - b.an).map((a) => ({ an: a.an, valoare: findMetric(a.formulare, metric)?.valoare ?? null }));
+export function seriesFor(ani: { an: number; formulare: FormularBilant[] }[], metric: MetricDef, formular?: string): { an: number; valoare: number | null }[] {
+  return [...ani].sort((a, b) => a.an - b.an).map((a) => ({ an: a.an, valoare: findMetric(a.formulare, metric, formular)?.valoare ?? null }));
+}
+
+/** Formularul cu cele mai multe ani de depunere (la egalitate, cel mai recent): seria comparabilă a unei firme. */
+export function primaryFormular(ani: { an: number; formulare: FormularBilant[] }[]): string | undefined {
+  const stat = new Map<string, { n: number; last: number }>();
+  for (const a of ani) for (const f of a.formulare) { const c = stat.get(f.formular) ?? { n: 0, last: 0 }; c.n++; c.last = Math.max(c.last, a.an); stat.set(f.formular, c); }
+  return [...stat.entries()].sort((x, y) => y[1].n - x[1].n || y[1].last - x[1].last)[0]?.[0];
+}
+
+/** Unitatea de măsură a unui indicator: numărul mediu de salariați nu este în lei. */
+export function unitFor(denumire: string): 'lei' | 'persoane' {
+  return norm(denumire).startsWith('numar mediu de salariati') ? 'persoane' : 'lei';
 }
 
 export const FORMULARE: { cod: string; titlu: string; descriere: string }[] = [

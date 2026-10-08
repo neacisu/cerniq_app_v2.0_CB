@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { BarChart3, Copy, Download, HelpCircle, LineChart as LineIcon, Search, Share2 } from 'lucide-react';
 import type { BilantToti } from '../api/types';
 import { collapse, fmtLei, fmtNum, pctChange } from '../lib/format';
-import { findMetric, METRICI, norm, seriesFor, metricById } from '../lib/indicators';
+import { findMetric, METRICI, norm, seriesFor, metricById, unitFor } from '../lib/indicators';
 import { copyText } from '../lib/export';
 import { useSettings } from '../state/settings';
 import { useUi } from '../state/ui';
@@ -26,7 +26,7 @@ export function FinanciarTab({ cui, ani, loading, error, noData, denumire, expor
   const [formIdx, setFormIdx] = useState(0);
   const forms = anSel?.formulare ?? [];
   const form = forms[Math.min(formIdx, forms.length - 1)];
-  const available = useMemo(() => METRICI.filter((m) => ani.some((a) => findMetric(a.formulare, m))), [ani]);
+  const available = useMemo(() => METRICI.filter((m) => ani.some((a) => findMetric(a.formulare, m, form?.formular))), [ani, form?.formular]);
   const [metricId, setMetricId] = useState('');
   const metric = metricById(available.find((m) => m.id === metricId)?.id ?? available[0]?.id ?? 'ca');
 
@@ -39,7 +39,7 @@ export function FinanciarTab({ cui, ani, loading, error, noData, denumire, expor
   const prevForm = prev?.formulare.find((f) => f.formular === form.formular);
   const prevMap = new Map(prevForm?.indicatori.map((i) => [norm(i.denumire), i.valoare]));
   const rows = form.indicatori.filter((i) => (!hideZero || i.valoare !== 0) && (!q || norm(`${i.cod} ${i.denumire}`).includes(norm(q))));
-  const serie = seriesFor(ani, metric);
+  const serie = seriesFor(ani, metric, form.formular);
   const kpiMetrics = ['ca', 'venituri', 'profit', 'pierdere', 'salariati'].map(metricById).map((m) => ({ m, cur: findMetric([form], m), pr: prevForm ? findMetric([prevForm], m) : undefined })).filter((k) => k.cur);
 
   return (
@@ -67,7 +67,7 @@ export function FinanciarTab({ cui, ani, loading, error, noData, denumire, expor
           <div style={{ overflowX: 'auto' }} className="no-print"><Seg label="Indicator grafic" value={metric.id} onChange={setMetricId} options={available.map((m) => ({ value: m.id, label: m.eticheta }))} /></div>
           <TrendChart tip={chartType} unitate={metric.tip === 'lei' ? 'lei' : ''} altText={`${metric.eticheta}: ${serie.map((p) => `${p.an} ${p.valoare ?? 'lipsă'}`).join(', ')}`}
             serii={[{ id: metric.id, nume: metric.eticheta, color: 'var(--accent)', puncte: serie.map((p) => ({ x: p.an, y: p.valoare })) }]} />
-          <p className="hint">Anii fără valoare publicată pentru acest indicator nu sunt desenați. Identificarea se face după denumirea din legenda anului.</p>
+          <p className="hint">Valorile sunt cele din formularul {form.formular}; anii în care firma nu a depus acest formular sau indicatorul lipsește nu sunt desenați. Identificarea se face după denumirea din legenda anului.</p>
         </Card>)}
 
       <Card title={`Toți indicatorii · ${anSel.an} · ${form.formular}`} icon={LineIcon}>
@@ -84,11 +84,11 @@ export function FinanciarTab({ cui, ani, loading, error, noData, denumire, expor
         <div className="searchbox no-print"><Search size={18} aria-hidden="true" /><input placeholder="Filtrează indicatori (denumire sau cod)…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filtrează indicatori" /></div>
         {rows.length === 0 ? <Empty icon={Search} title="Niciun indicator">Schimbă filtrul sau dezactivează „Doar valori nenule”.</Empty> : (
           <div className="table-wrap"><table className="table">
-            <thead><tr><th>Cod</th><th>Indicator</th><th className="num">Valoare (lei)</th><th className="num">{prev ? `vs ${prev.an}` : 'Variație'}</th><th className="no-print"><span className="sr-only">Acțiuni</span></th></tr></thead>
+            <thead><tr><th>Cod</th><th>Indicator</th><th className="num">Valoare</th><th>UM</th><th className="num">{prev ? `vs ${prev.an}` : 'Variație'}</th><th className="no-print"><span className="sr-only">Acțiuni</span></th></tr></thead>
             <tbody>{rows.map((i) => {
               const p = prevMap.get(norm(i.denumire));
               return <tr key={i.cod}><td className="mono">{i.cod}</td><td>{collapse(i.denumire)}</td>
-                <td className={`num${i.valoare < 0 ? ' neg' : ''}`}>{fmtNum(i.valoare)}</td>
+                <td className={`num${i.valoare < 0 ? ' neg' : ''}`}>{fmtNum(i.valoare)}</td><td className="muted">{unitFor(i.denumire)}</td>
                 <td className="num"><Delta pct={pctChange(i.valoare, p)} /></td>
                 <td className="no-print"><button className="btn btn-ghost btn-icon btn-sm" aria-label={`Copiază valoarea ${collapse(i.denumire)}`} onClick={async () => toast((await copyText(String(i.valoare))) ? 'Valoare copiată' : 'Nu am putut copia')}><Copy size={16} aria-hidden="true" /></button></td></tr>;
             })}</tbody></table></div>)}

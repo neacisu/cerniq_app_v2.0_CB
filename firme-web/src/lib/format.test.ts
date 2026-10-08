@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pctChange, titleCase, collapse } from './format';
 import { detectType, normalizeCui, pathInmatriculare, cuiUtilizabil } from './cui';
-import { findMetric, METRICI, norm, seriesFor } from './indicators';
+import { findMetric, METRICI, norm, primaryFormular, seriesFor, unitFor } from './indicators';
 import { toCsv } from './export';
 
 describe('format', () => {
@@ -35,3 +35,32 @@ describe('indicators', () => {
 describe('export', () => { it('csv', () => { expect(toCsv([['a;b', 'c']])).toContain('"a;b";c'); }); });
 import { fmtAxis } from './format';
 describe('fmtAxis', () => { it('scurtează', () => { expect(fmtAxis(1_250_000)).toBe('1,3 mil.'); expect(fmtAxis(750_000)).toBe('750 mii'); expect(fmtAxis(-500)).toBe('-500'); }); });
+
+describe('metrici pe formulare', () => {
+  const f = (formular: string, den: string, valoare: number) => ({ formular, caen: null, caenDenumire: null, caenVersiune: '2', caeno: null, indicatori: [{ cod: 'I1', denumire: den, pozitie: 1, valoare }] });
+  const m = (id: string) => METRICI.find((x) => x.id === id)!;
+  it('recunoaște „Profitul net/brut” din bilanțul lung', () => {
+    expect(findMetric([f('WEB_BL_BS_SL', 'Profitul net', 9)], m('profit'))?.valoare).toBe(9);
+    expect(findMetric([f('WEB_BL_BS_SL', 'Profitul brut', 8)], m('profit-brut'))?.valoare).toBe(8);
+  });
+  it('nu face potrivire pe prefix (ONG/IFN)', () => {
+    expect(findMetric([f('WEB_ONG', 'Venituri totale - prevederi anuale', 1)], m('venituri'))).toBeUndefined();
+    expect(findMetric([f('WEB_IFN', 'Datorii financiare evaluate la cost amortizat', 1)], m('datorii'))).toBeUndefined();
+  });
+  it('capitaluri cu și fără „, din care:”', () => {
+    expect(findMetric([f('A', 'CAPITALURI - TOTAL din care:', 3)], m('capitaluri'))?.valoare).toBe(3);
+    expect(findMetric([f('A', 'CAPITALURI - TOTAL, din care:', 4)], m('capitaluri'))?.valoare).toBe(4);
+  });
+  it('respectă formularul ales când există două depuneri în același an', () => {
+    const an = [{ an: 2024, formulare: [f('WEB_UU', 'Profit net', 1), f('WEB_BL_BS_SL', 'Profitul net', 2)] }];
+    expect(seriesFor(an, m('profit'), 'WEB_BL_BS_SL')[0]?.valoare).toBe(2);
+    expect(seriesFor(an, m('profit'), 'WEB_UU')[0]?.valoare).toBe(1);
+    expect(seriesFor(an, m('profit'), 'WEB_ONG')[0]?.valoare).toBeNull();
+  });
+  it('primaryFormular: cel mai frecvent, apoi cel mai recent', () => {
+    const a = (an: number, ...fs: string[]) => ({ an, formulare: fs.map((x) => f(x, 'x', 1)) });
+    expect(primaryFormular([a(2021, 'WEB_UU'), a(2022, 'WEB_UU'), a(2023, 'WEB_UU', 'WEB_IR'), a(2024, 'WEB_IR')])).toBe('WEB_UU');
+    expect(primaryFormular([a(2023, 'WEB_UU'), a(2024, 'WEB_IR')])).toBe('WEB_IR');
+  });
+  it('unitFor', () => { expect(unitFor('Numar mediu de salariati')).toBe('persoane'); expect(unitFor('Profit net')).toBe('lei'); });
+});

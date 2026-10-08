@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Download, GitCompareArrows, Plus, Share2, Trash2, X } from 'lucide-react';
 import { useBilanturi, useCuiMulti } from '../api/hooks';
 import { isCui } from '../lib/cui';
-import { findMetric, METRICI, metricById } from '../lib/indicators';
+import { findMetric, METRICI, metricById, primaryFormular } from '../lib/indicators';
 import { download, toCsv } from '../lib/export';
 import { collapse, fmtLei, fmtNum, titleCase } from '../lib/format';
 import { MAX_COMPARE, useLibrary } from '../state/library';
@@ -28,9 +28,10 @@ export default function Compare() {
   const nume = cuis.map((c, i) => titleCase(meta[i]?.data?.platitor?.denumire ?? meta[i]?.data?.inmatriculari[0]?.denumire ?? compare.find((x) => x.cui === c)?.denumire ?? c));
   useEffect(() => { if (fromUrl) document.title = 'Comparare · Firme Cerniq'; }, [fromUrl]);
 
+  const formulare = cuis.map((_, i) => primaryFormular(bil[i]?.data?.ani ?? []));
   const serii = cuis.map((c, i) => ({
     id: c, nume: nume[i]!, color: PALETA[i % PALETA.length]!,
-    puncte: (bil[i]?.data?.ani ?? []).map((a) => ({ x: a.an, y: findMetric(a.formulare, metric)?.valoare ?? null })),
+    puncte: (bil[i]?.data?.ani ?? []).map((a) => ({ x: a.an, y: findMetric(a.formulare, metric, formulare[i])?.valoare ?? null })),
   }));
   const ani = [...new Set(serii.flatMap((s) => s.puncte.map((p) => p.x)))].sort((a, b) => b - a);
   const loading = bil.some((b) => b.isPending) && cuis.length > 0;
@@ -80,7 +81,7 @@ export default function Compare() {
             <section className="glass card stack"><h2 className="card-title">Tabel pe ani</h2>
               <div className="table-wrap"><table className="table"><thead><tr><th>An</th>{serii.map((s) => <th key={s.id} className="num"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color, marginRight: 6 }} />{s.nume}</th>)}</tr></thead>
                 <tbody>{ani.map((an) => <tr key={an}><td><b>{an}</b></td>{serii.map((s) => { const v = s.puncte.find((p) => p.x === an)?.y; return <td key={s.id} className={`num${v != null && v < 0 ? ' neg' : ''}`}>{v == null ? '—' : metric.tip === 'lei' ? fmtLei(v) : fmtNum(v)}</td>; })}</tr>)}</tbody></table></div>
-              <p className="hint">Indicatorul este identificat după denumirea din legenda fiecărui an ({collapse(metric.potrivire)}). „—” înseamnă că nu există valoare publicată.</p>
+              <p className="hint">Indicatorul este identificat după denumirea din legenda fiecărui an ({collapse(metric.potriviri[0] ?? '')}). Pentru fiecare firmă se folosește formularul depus în cei mai mulți ani ({nume.map((n, i) => `${n}: ${formulare[i] ?? '—'}`).join('; ')}), ca seriile să fie comparabile. „—” înseamnă că nu există valoare publicată.</p>
             </section>)}
         </>)}
     </div>

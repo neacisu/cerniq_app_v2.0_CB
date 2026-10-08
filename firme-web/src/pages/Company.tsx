@@ -5,7 +5,7 @@ import { useBilantToti, useCui, useInmatriculare } from '../api/hooks';
 import { ApiError } from '../api/client';
 import { adresaOnrc, adresaPlatitor, collapse, fmtLei, fmtNum, isYes, pctChange, titleCase } from '../lib/format';
 import { cuiUtilizabil, pathFirma } from '../lib/cui';
-import { findMetric, METRICI, metricById } from '../lib/indicators';
+import { findMetric, METRICI, metricById, primaryFormular, seriesFor, unitFor } from '../lib/indicators';
 import { useLibrary, type FirmaRef } from '../state/library';
 import { useSettings } from '../state/settings';
 import { useUi } from '../state/ui';
@@ -82,8 +82,8 @@ export default function Company() {
 
   const exportSections = (): ExportSection[] => {
     const id: unknown[][] = [['Câmp', 'Valoare'], ['Denumire', denumire], ['CUI', cui ?? ''], ['Nr. înmatriculare', cod ?? ''], ['Stare ANAF', platitor?.stare ?? ''], ['Adresă', adresaPlatitor(platitor) || adresaOnrc(onrc[0])]];
-    const fin: unknown[][] = [['An', 'Formular', 'Cod', 'Indicator', 'Valoare']];
-    ani.forEach((a) => a.formulare.forEach((f) => f.indicatori.forEach((i) => fin.push([a.an, f.formular, i.cod, collapse(i.denumire), i.valoare]))));
+    const fin: unknown[][] = [['An', 'Formular', 'Cod', 'Indicator', 'Valoare', 'UM']];
+    ani.forEach((a) => a.formulare.forEach((f) => f.indicatori.forEach((i) => fin.push([a.an, f.formular, i.cod, collapse(i.denumire), i.valoare, unitFor(i.denumire)]))));
     return [
       { id: 'identificare', label: 'Identificare', rows: id, json: { denumire, cui, codInmatriculare: cod, platitor, onrc } },
       { id: 'financiar', label: 'Situații financiare', rows: fin, json: ani },
@@ -137,19 +137,21 @@ function Prezentare({ platitor, onrc, cui, stari, bilant, bilantLoading, cuiData
 }) {
   const ani = bilant?.ani ?? [];
   const sorted = [...ani].sort((a, b) => b.an - a.an);
-  const last = sorted[0], prev = sorted[1];
+  const fp = primaryFormular(ani);
+  const last = sorted.find((a) => a.formulare.some((f) => f.formular === fp)) ?? sorted[0];
+  const prev = sorted.find((a) => a.an < (last?.an ?? 0) && a.formulare.some((f) => f.formular === fp));
   const kpis = ['ca', 'profit', 'pierdere', 'salariati', 'capitaluri'].map((id) => {
-    const m = metricById(id); const cur = last ? findMetric(last.formulare, m) : undefined; const pr = prev ? findMetric(prev.formulare, m) : undefined;
+    const m = metricById(id); const cur = last ? findMetric(last.formulare, m, fp) : undefined; const pr = prev ? findMetric(prev.formulare, m, fp) : undefined;
     return { m, cur, delta: pctChange(cur?.valoare, pr?.valoare) };
   }).filter((k) => k.cur && !(k.m.id === 'pierdere' && k.cur.valoare === 0)).slice(0, 4);
-  const serieCa = ani.length > 1 ? [...ani].sort((a, b) => a.an - b.an).map((a) => ({ x: a.an, y: findMetric(a.formulare, METRICI[0]!)?.valoare ?? null })) : [];
-  const caen = last?.formulare[0];
+  const serieCa = ani.length > 1 ? seriesFor(ani, METRICI[0]!, fp).map((p) => ({ x: p.an, y: p.valoare })) : [];
+  const caen = last?.formulare.find((f) => f.formular === fp) ?? last?.formulare[0];
   return (
     <>
       {bilantLoading && <div className="kpi-grid">{Array.from({ length: 4 }, (_, i) => <div key={i} className="kpi"><Skeleton w="50%" /><Skeleton w="80%" h={30} /></div>)}</div>}
       {kpis.length > 0 && last && (
         <section aria-label={`Indicatori cheie ${last.an}`} className="stack-sm">
-          <div className="row between"><h2 className="card-title">Indicatori cheie · {last.an}</h2><button className="btn btn-sm btn-ghost" onClick={() => go('financiar')}>Toate datele financiare →</button></div>
+          <div className="row between"><h2 className="card-title">Indicatori cheie · {last.an} <Badge>{fp}</Badge></h2><button className="btn btn-sm btn-ghost" onClick={() => go('financiar')}>Toate datele financiare →</button></div>
           <div className="kpi-grid">{kpis.map((k) => (
             <div key={k.m.id} className="kpi glass live"><span className="k">{k.m.eticheta}</span>
               <span className="v">{k.m.tip === 'lei' ? fmtLei(k.cur!.valoare, compact) : fmtNum(k.cur!.valoare)}</span>{k.delta !== null && <Delta pct={k.delta} inverse={k.m.ton === 'negativ'} label={prev ? `față de ${prev.an}` : ''} />}</div>))}</div>
