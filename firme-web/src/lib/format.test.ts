@@ -33,3 +33,5 @@ describe('indicators', () => {
   });
 });
 describe('export', () => { it('csv', () => { expect(toCsv([['a;b', 'c']])).toContain('"a;b";c'); }); });
+import { fmtAxis } from './format';
+describe('fmtAxis', () => { it('scurtează', () => { expect(fmtAxis(1_250_000)).toBe('1,3 mil.'); expect(fmtAxis(750_000)).toBe('750 mii'); expect(fmtAxis(-500)).toBe('-500'); }); });
