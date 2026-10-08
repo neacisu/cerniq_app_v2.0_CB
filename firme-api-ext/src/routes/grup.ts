@@ -27,13 +27,16 @@ const deps: Deps = {
   },
   async repsDePersoane(chei, doarCalitati) {
     if (chei.length === 0) return [];
+    // Prefiltrul ieftin pe dată (și lungimea 10 sau 19, adică cele două forme din sursă) înaintea expresiei de nume
+    // scade parcurgerea tabelei de la ~2,6 s la ~0,5 s; potrivirea exactă rămâne cea din JOIN.
     const r = await pool.query<Rep>(
       `select r."COD_INMATRICULARE" as cod, k.nume, k.data, ${calitate('r."CALITATE"')} as calitate
          from od_reprezentanti_legali r
          join unnest($1::text[], $2::text[]) as k(nume, data)
            on ${nume('r."PERSOANA_IMPUTERNICITA"')} = k.nume
           and left(btrim(r."DATA_NASTERE"), 10) = k.data
-        where btrim(r."DATA_NASTERE") ~ '${REGEX_DATA}'
+        where left(btrim(r."DATA_NASTERE"), 10) = any($2::text[])
+          and length(btrim(r."DATA_NASTERE")) in (10, 19)
           and ($3::text[] is null or ${calitate('r."CALITATE"')} = any($3::text[]))`,
       [chei.map((k) => k.nume), chei.map((k) => k.data), doarCalitati ? [...doarCalitati] : null],
     );
