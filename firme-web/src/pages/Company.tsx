@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Briefcase, Building2, Download, Landmark, LineChart as LineIcon, MapPin, Printer, ScrollText, Share2, Users } from 'lucide-react';
+import { Briefcase, Building2, Download, Landmark, LineChart as LineIcon, MapPin, Network, Printer, ScrollText, Share2, Users } from 'lucide-react';
 import { useBilantToti, useCui, useInmatriculare } from '../api/hooks';
 import { ApiError } from '../api/client';
 import { adresaOnrc, adresaPlatitor, collapse, fmtLei, fmtNum, isYes, pctChange, titleCase } from '../lib/format';
@@ -14,12 +14,13 @@ import { Badge, Card, Empty, ErrorBox, KV, Seg, Skeleton, SkeletonLines } from '
 import { TrendChart } from '../components/TrendChart';
 import type { ExportSection } from '../components/dialogs';
 import { FinanciarTab } from './CompanyFinanciar';
+import { GrupTab } from './CompanyGrup';
 import { Delta } from './Delta';
 import type { BilantToti, CuiResponse, FirmaOnrc, InmatriculareResponse, Platitor } from '../api/types';
 
 const TABS = [
   { value: 'prezentare', label: 'Prezentare', icon: Building2 }, { value: 'financiar', label: 'Financiar', icon: LineIcon },
-  { value: 'stari', label: 'Stări ONRC', icon: ScrollText }, { value: 'reprezentanti', label: 'Reprezentanți', icon: Users }, { value: 'fiscal', label: 'Date ANAF', icon: Landmark },
+  { value: 'stari', label: 'Stări ONRC', icon: ScrollText }, { value: 'reprezentanti', label: 'Reprezentanți', icon: Users }, { value: 'grup', label: 'Grup', icon: Network }, { value: 'fiscal', label: 'Date ANAF', icon: Landmark },
 ] as const;
 type TabId = (typeof TABS)[number]['value'];
 
@@ -38,7 +39,7 @@ export default function Company() {
   const cuiParam = !isInm ? (params.cui ?? null) : null;
   const codParam = isInm ? (params['*'] ?? null) : null;
   const [sp, setSp] = useSearchParams();
-  const tab = (TABS.find((t) => t.value === sp.get('tab'))?.value ?? 'prezentare') as TabId;
+  const tabCerut = TABS.find((t) => t.value === sp.get('tab'))?.value ?? 'prezentare';
   const { addIstoric } = useLibrary();
   const { settings } = useSettings();
   const { open } = useUi();
@@ -68,6 +69,8 @@ export default function Company() {
   if (primaryErr && !denumire) return <div className="page"><ErrorBox error={primaryErr} onRetry={() => void (isInm ? inmByCod.refetch() : cuiQ.refetch())} /><Link to="/cauta" className="btn" style={{ alignSelf: 'center' }}>Înapoi la căutare</Link></div>;
   if (loadingMain || (isInm && !inmByCod.data)) return <CompanySkeleton />;
 
+  const tab: TabId = tabCerut === 'grup' && !cod ? 'prezentare' : tabCerut;
+  const taburi = TABS.filter((t) => t.value !== 'grup' || !!cod);
   const stari = inm?.stari ?? [];
   const ani = bilant.data?.ani ?? [];
   const statusBadges = (
@@ -112,13 +115,14 @@ export default function Company() {
 
       <div className="no-print" style={{ overflowX: 'auto' }}>
         <Seg label="Secțiuni fișă" value={tab} onChange={(v) => setSp((p) => { const n = new URLSearchParams(p); n.set('tab', v); return n; }, { replace: true })}
-          options={TABS.map((t) => ({ value: t.value, label: <><t.icon size={18} aria-hidden="true" />{t.label}</> }))} />
+          options={taburi.map((t) => ({ value: t.value, label: <><t.icon size={18} aria-hidden="true" />{t.label}</> }))} />
       </div>
 
       {tab === 'prezentare' && <Prezentare platitor={platitor} onrc={onrc} cui={cui} stari={stari} bilant={bilant.data} bilantLoading={bilant.isPending && !!cui && (cuiQ.data?.bilant.length ?? 0) > 0} cuiData={cuiQ.data} go={(t) => setSp({ tab: t })} compact={settings.compactNumbers} />}
       {tab === 'financiar' && <FinanciarTab cui={cui} ani={ani} loading={bilant.isPending && !!cui} error={bilant.error} noData={!!cuiQ.data && cuiQ.data.bilant.length === 0} denumire={denumire} exportFin={() => open('export', { titlu: `${denumire}: situații financiare`, fisier: `bilant-${cui}`, sectiuni: exportSections().filter((s) => s.id === 'financiar') })} />}
       {tab === 'stari' && <StariTab stari={stari} loading={isInm ? false : inmByCui.isPending} error={inmByCui.error} cod={cod} />}
       {tab === 'reprezentanti' && <ReprezentantiTab inm={inm} loading={isInm ? false : inmByCui.isPending} error={inmByCui.error} />}
+      {tab === 'grup' && cod && <GrupTab cod={cod} cui={cui} denumire={denumire} />}
       {tab === 'fiscal' && <FiscalTab p={platitor} loading={!platitor && cuiQ.isPending} />}
     </div>
   );

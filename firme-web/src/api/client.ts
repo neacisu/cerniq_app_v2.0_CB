@@ -1,6 +1,6 @@
 import type {
   BilantAnResponse, BilantToti, CaenResponse, CautareResponse, CuiResponse, IndicatoriResponse,
-  InmatriculareResponse, StareNomenclator, VersiuneCaen,
+  InmatriculareResponse, StareNomenclator, VersiuneCaen, GrafGrup, ParamGrup,
 } from './types';
 
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
@@ -33,7 +33,16 @@ export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> 
 
 const enc = encodeURIComponent;
 
+export function queryGrup(p: ParamGrup): string {
+  const q = new URLSearchParams({ adancime: String(p.adancime), plafon: String(p.plafon), profesionisti: String(p.profesionisti), slabe: String(p.slabe) });
+  p.fara.forEach((x) => q.append('fara', x));
+  p.faraRoluri.forEach((x) => q.append('faraRoluri', x));
+  return q.toString();
+}
+
 export const api = {
+  grup: (cod: string, p: ParamGrup, s?: AbortSignal) =>
+    apiGet<GrafGrup>(`/grup/${cod.split('/').map(enc).join('/')}?${queryGrup(p)}`, s),
   health: (s?: AbortSignal) => apiGet<{ stare: string }>('/health', s),
   cauta: (q: string, limit: number, s?: AbortSignal) => apiGet<CautareResponse>(`/firme?q=${enc(q)}&limit=${limit}`, s),
   cui: (cui: string, s?: AbortSignal) => apiGet<CuiResponse>(`/cui/${enc(cui)}`, s),

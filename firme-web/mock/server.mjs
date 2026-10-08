@@ -28,6 +28,35 @@ const onrc = (f) => ({ denumire: f.den, cui: f.cui, codInmatriculare: f.cod, dat
 const caen = [['A', '', '', '', '', 'AGRICULTURĂ, SILVICULTURĂ ȘI PESCUIT'], ['', '', '01', '', '', 'Culturi vegetale și creșterea animalelor'], ['', '', '01', '011', '0111', 'Cultivarea cerealelor'], ['', '', '01', '011', '0112', 'Cultivarea orezului'], ['F', '', '', '', '', 'CONSTRUCȚII'], ['', '', '41', '412', '4120', 'Lucrări de construcții a clădirilor rezidențiale și nerezidențiale'], ['G', '', '', '', '', 'COMERȚ'], ['', '', '47', '471', '4711', 'Comerț cu amănuntul în magazine nespecializate, cu vânzare predominantă de produse alimentare']]
   .map(([sectiunea, subsectiunea, diviziunea, grupa, clasa, denumire]) => ({ sectiunea, subsectiunea, diviziunea, grupa, clasa, denumire, versiuneCaen: '2' }));
 
+
+// Graful administratorilor: formă identică cu API-ul real, date fictive.
+function grup(cod, u) {
+  const root = firme.find((x) => x.cod === cod);
+  if (!root) return [404, { eroare: 'Firma nu a fost găsită' }];
+  const adancime = Number(u.searchParams.get('adancime') ?? 1), plafon = Number(u.searchParams.get('plafon') ?? 120);
+  const prof = u.searchParams.get('profesionisti') === 'true', slabe = u.searchParams.get('slabe') !== 'false';
+  const fara = u.searchParams.getAll('fara'), faraRoluri = u.searchParams.getAll('faraRoluri');
+  const F = (c, den, nivel) => ({ id: `f:${c}`, tip: 'firma', cod: c, cui: c.length % 2 ? '1234' + c.length : null, denumire: den, nivel, radacina: false });
+  const P = (nume, data, nivel, nrFirme, calitati) => ({ id: `p:${nume}|${data}`, tip: 'persoana', nume, data, slaba: data.startsWith('01/01'), nivel, nrFirme, calitati });
+  const noduri = [{ id: `f:${root.cod}`, tip: 'firma', cod: root.cod, cui: root.cui, denumire: root.den, nivel: 0, radacina: true }];
+  const muchii = [], neconfirmate = [];
+  const leaga = (p, c, calitate = 'administrator', slaba = false) => { if (!faraRoluri.includes(calitate)) muchii.push({ persoana: p.id, firma: `f:${c}`, calitate, strat: calitate === 'administrator' ? 'administrator' : 'profesional', slaba }); };
+  const ion = P('POPESCU ION', '12/03/1980', 0, 7, ['administrator']);
+  if (!fara.includes(ion.id)) { noduri.push(ion); leaga(ion, root.cod); for (let i = 1; i <= 6; i++) { noduri.push(F(`G${i}`, `CONSTRUCT GRUP ${i} S.R.L.`, 1)); leaga(ion, `G${i}`); } }
+  const maria = P('IONESCU MARIA', '01/01/1968', 0, 3, ['administrator']);
+  if (slabe && !fara.includes(maria.id)) { noduri.push(maria); leaga(maria, root.cod, 'administrator', true); for (let i = 7; i <= 8; i++) { noduri.push(F(`G${i}`, `AGRO MARIA ${i} S.R.L.`, 1)); leaga(maria, `G${i}`, 'administrator', true); } }
+  else if (!slabe) neconfirmate.push({ nume: 'IONESCU MARIA', data: '01/01/1968', calitate: 'administrator', strat: 'administrator', motiv: 'data-slaba' });
+  neconfirmate.push({ nume: 'GHEORGHE VASILE', data: null, calitate: 'administrator', strat: 'administrator', motiv: 'fara-data' });
+  if (prof) { const l = P('LICHIDATOR EXPERT', '03/03/1960', 0, 5, ['lichidator']); noduri.push(l); leaga(l, root.cod, 'lichidator'); for (let i = 1; i <= 4; i++) { noduri.push(F(`L${i}`, `FIRMA IN LICHIDARE ${i} S.R.L.`, 1)); leaga(l, `L${i}`, 'lichidator'); } }
+  if (adancime >= 2 && !fara.includes(ion.id)) { const ana = P('MARINESCU ANA', '05/05/1985', 1, 5, ['administrator']); noduri.push(ana); leaga(ana, 'G1'); for (let i = 1; i <= 4; i++) { noduri.push(F(`H${i}`, `LOGISTIC ANA ${i} S.R.L.`, 2)); leaga(ana, `H${i}`); } }
+  let trunchiat = false; const omise = { firme: 0, persoane: 0 };
+  if (noduri.length > plafon) { trunchiat = true; while (noduri.length > plafon) { const x = noduri.pop(); if (x.tip === 'firma') omise.firme++; else omise.persoane++; } }
+  const ids = new Set(noduri.map((n) => n.id)); const m2 = muchii.filter((m) => ids.has(m.persoana) && ids.has(m.firma));
+  const cnt = {}; m2.forEach((m) => { cnt[m.calitate] = (cnt[m.calitate] ?? 0) + 1; });
+  const roluri = [...Object.entries(cnt).map(([calitate, nr]) => ({ calitate, nr, activ: true })), ...faraRoluri.filter((c) => !cnt[c]).map((calitate) => ({ calitate, nr: 0, activ: false }))];
+  return [200, { radacina: { cod: root.cod, cui: root.cui, denumire: root.den }, noduri, muchii: m2, neconfirmate, roluri, trunchiat, omise, parametri: { adancime, plafon, profesionisti: prof, dateSlabe: slabe, fara, faraRoluri } }];
+}
+
 function route(url) {
   const u = new URL(url, 'http://x'), p = decodeURIComponent(u.pathname);
   if (p === '/health') return [200, { stare: 'ok' }];
@@ -41,6 +70,7 @@ function route(url) {
     hit.forEach((f) => out.push({ sursa: 'onrc', denumire: f.den, cui: f.cui, codInmatriculare: f.cod }));
     return [200, { rezultate: out.slice(0, lim) }];
   }
+  if (p.startsWith('/grup/')) return grup(p.slice(6), u);
   let m;
   if ((m = p.match(/^\/cui\/(\d{2,13})$/))) { const f = firme.find((x) => x.cui === m[1]); return f ? [200, { cui: f.cui, platitor: platitor(f), inmatriculari: [onrc(f)], bilant: f.ani.map((an) => ({ an, formular: 'WEB_UU' })) }] : [404, { eroare: 'Firma nu a fost găsită' }]; }
   if ((m = p.match(/^\/firme\/inmatriculare\/(.+)$/))) { const f = firme.find((x) => x.cod === m[1]); return f ? [200, { codInmatriculare: f.cod, firme: [onrc(f)], stari: f.stari.map(([cod, denumire]) => ({ cod, denumire })), reprezentantiLegali: [{ persoanaImputernicita: 'POPESCU ION', calitate: 'Administrator', dataNastere: '12/03/1980', localitateNastere: 'Brăila', judetNastere: 'Brăila', taraNastere: 'România', localitate: 'Viziru', judet: 'Brăila', tara: 'România' }, { persoanaImputernicita: 'IONESCU MARIA', calitate: 'Asociat', dataNastere: '', localitateNastere: '', judetNastere: '', taraNastere: '', localitate: '', judet: '', tara: '' }], reprezentantiIf: [], sucursale: [], platitori: [platitor(f)] }] : [404, { eroare: 'Firma nu a fost găsită' }]; }

@@ -1,6 +1,6 @@
-import { useQuery, useQueries, type UseQueryResult } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueries, type UseQueryResult } from '@tanstack/react-query';
 import { api, ApiError } from './client';
-import type { BilantToti, CuiResponse, InmatriculareResponse } from './types';
+import type { BilantToti, CuiResponse, InmatriculareResponse, ParamGrup } from './types';
 
 const DAY = 24 * 60 * 60 * 1000;
 export const retry = (n: number, e: unknown) => !(e instanceof ApiError && e.status >= 400 && e.status < 500) && n < 2;
@@ -35,3 +35,7 @@ export function useIndicatoriAni(ani: number[], formular: string, enabled: boole
   return useQueries({ queries: ani.map((an) => ({ queryKey: ['indicatori', an, formular], queryFn: ({ signal }: { signal: AbortSignal }) => api.indicatori(an, formular, signal), enabled, staleTime: DAY, retry })) });
 }
 export type { InmatriculareResponse };
+
+/** Graful se reconstruiește din aceeași interogare la fiecare filtru; desenul anterior rămâne vizibil cât se încarcă cel nou. */
+export const useGrup = (cod: string | null, p: ParamGrup) =>
+  useQuery({ queryKey: ['grup', cod, p], queryFn: ({ signal }) => api.grup(cod!, p, signal), enabled: !!cod, staleTime: 10 * 60_000, retry, placeholderData: keepPreviousData });

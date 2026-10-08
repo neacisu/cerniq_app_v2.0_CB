@@ -9,3 +9,6 @@ Aceleași convenții ca `mcp-hetzner` din `/opt/traefik/dynamic`: serviciu pe ho
 5. DNS Cloudflare: `A firme.cerniq.app → 2.29.8.65` (hz2.65). Aici rămâne DNS-only, ca restul înregistrărilor care folosesc DNS-01.
 
 API-ul de citire (`/opt/firme-api`, `127.0.0.1:4186`) nu se modifică și rămâne neexpus direct; nginx îl expune doar pe `/api/` cu GET/HEAD și rate limit.
+
+## Graful administratorilor
+`GET /api/grup/<cod>` este servit de o a doua instanță a API-ului (`firme-api-ext`, sesiune tmux `firme-api-grup`, `127.0.0.1:4197`), cu `location /api/grup/` în `nginx.conf` și limită de 3 cereri/s. Instanța principală de pe 4186 nu a fost repornită. Detalii în `firme-api-ext/README.md`.

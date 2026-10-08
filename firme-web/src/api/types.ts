@@ -69,3 +69,21 @@ export interface ClasaCaen {
 }
 export interface CaenResponse { versiune: string; clase: ClasaCaen[] }
 export interface StareNomenclator { cod: string; denumire: string }
+
+/* ───────── Graful administratorilor (GET /grup/*) ───────── */
+export type StratGrup = 'administrator' | 'profesional';
+export interface NodFirmaGrup { id: string; tip: 'firma'; cod: string; cui: string | null; denumire: string; nivel: number; radacina: boolean }
+export interface NodPersoanaGrup { id: string; tip: 'persoana'; nume: string; data: string; slaba: boolean; nivel: number; nrFirme: number; calitati: string[] }
+export interface MuchieGrup { persoana: string; firma: string; calitate: string; strat: StratGrup; slaba: boolean }
+export interface NeconfirmatGrup { nume: string; data: string | null; calitate: string; strat: StratGrup; motiv: 'fara-data' | 'data-slaba' }
+export interface GrafGrup {
+  radacina: { cod: string; cui: string | null; denumire: string };
+  noduri: (NodFirmaGrup | NodPersoanaGrup)[];
+  muchii: MuchieGrup[];
+  neconfirmate: NeconfirmatGrup[];
+  roluri: { calitate: string; nr: number; activ: boolean }[];
+  trunchiat: boolean;
+  omise: { firme: number; persoane: number };
+  parametri: { adancime: 1 | 2; plafon: number; profesionisti: boolean; dateSlabe: boolean; fara: string[]; faraRoluri: string[] };
+}
+export interface ParamGrup { adancime: 1 | 2; plafon: number; profesionisti: boolean; slabe: boolean; fara: string[]; faraRoluri: string[] }
