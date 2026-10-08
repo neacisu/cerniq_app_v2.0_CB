@@ -1,0 +1,15 @@
+{
+  "name": "firme-api-ext",
+  "private": true,
+  "type": "module",
+  "description": "Extensie pentru /opt/firme-api: graful administratorilor (GET /grup/*). Fișierele se copiază în /opt/firme-api/src.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
