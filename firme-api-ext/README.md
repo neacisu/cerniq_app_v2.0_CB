@@ -21,3 +21,8 @@ Căutarea firmelor unei persoane parcurge `od_reprezentanti_legali` o dată pe n
 
 ## Teste
 `npm i && npm test`
+
+## Rute adăugate ulterior
+- `GET /anaf/:cui` și `GET /anaf?cui=a,b,c` (max 100): stratul ANAF v9 (`anaf_v9_*`), ultima `data_interogare` per CUI. `stareFiscala` (radiat > dizolvat > suspendat > inactiv > activ) și `tva` (plătitor/anulat/neplătitor) se derivă în `anaf.ts`; v9 prevalează la stare, iar diferențele față de snapshot-ul ANAF 2026 sunt întoarse în `discrepante`, nu ascunse. Stările de interogare (`gasit`, `negasit`, `asteptare`, `exclus`, `absent`) rămân distincte.
+- `GET /dosare?cui=|cod=&…` și `GET /dosare/:id`: dosare din portalul instanțelor, legate de firmă doar prin `dosar_legatura` (după nume). Fiecare dosar are un grad de potrivire calculat transparent (`exacta`, `reprezentant`, `partiala`, `nume`), iar răspunsul spune cât de completă este căutarea (`acoperire`).
+- Graful contopește înmatriculările multiple ale aceleiași firme (mutări de sediu): același CUI + aceeași denumire de bază = un nod cu `coduri`; același CUI cu denumiri diferite rămâne separat, marcat `cuiPartajat`.

@@ -125,7 +125,7 @@ function DosarCard({ x, onOpen }: { x: DosarLista; onOpen: () => void }) {
   return (
     <article role="listitem" className="dosar-card">
       <div className="row between nw" style={{ alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0 }}><div className="mono" style={{ fontWeight: 600, fontSize: 16 }}>{x.numar}</div><div className="muted truncate">{collapse(x.instanta)}{x.departament ? ` · ${collapse(x.departament)}` : ''}</div></div>
+        <div style={{ minWidth: 0 }}><div className="mono" style={{ fontWeight: 600, fontSize: 16 }}>{x.numar}</div><div className="muted truncate">{collapse(x.instanta) || 'Instanță nepublicată în sursă'}{x.departament ? ` · ${collapse(x.departament)}` : ''}</div></div>
         <Badge tone={g.ton} title={g.text}>{g.scurt}</Badge>
       </div>
       <div className="row" style={{ gap: 6 }}>{x.categorie && <Badge tone="blue">{x.categorie}</Badge>}{x.stadiu && <Badge>{x.stadiu}</Badge>}{x.rol.map((r) => <Badge key={r} tone="violet">{r}</Badge>)}{x.dataInViitor && <Badge tone="amber" title="Data dosarului este în viitor: probabil o eroare a sursei">dată suspectă</Badge>}</div>

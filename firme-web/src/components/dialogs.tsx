@@ -243,7 +243,7 @@ function DosarDialog({ id, cui, cod, denumire }: { id: number; cui: string | nul
       {d && (<>
         <div className="row" style={{ gap: 6 }}><Badge tone="blue">{d.categorie}</Badge><Badge>{d.stadiu}</Badge><Badge tone={GRAD[d.potrivire].ton}>{GRAD[d.potrivire].eticheta}</Badge></div>
         <p style={{ fontSize: 17, fontWeight: 600 }}>{d.obiect || 'Fără obiect publicat'}</p>
-        <dl className="kv"><div><dt>Instanță</dt><dd>{d.instanta}{d.departament ? ` · ${d.departament}` : ''}</dd></div><div><dt>Înregistrat</dt><dd>{dataRo(d.dataDosar) || '—'}</dd></div>
+        <dl className="kv"><div><dt>Instanță</dt><dd>{d.instanta || 'Nepublicată în sursă'}{d.departament ? ` · ${d.departament}` : ''}</dd></div><div><dt>Înregistrat</dt><dd>{dataRo(d.dataDosar) || '—'}{d.dataInViitor && <> <Badge tone="amber" title="Data din sursă este în viitor: probabil o eroare a portalului">dată în viitor</Badge></>}</dd></div>
           {d.dataInitiala && <div><dt>Data inițială</dt><dd>{dataRo(d.dataInitiala)}</dd></div>}{d.numarVechi && <div><dt>Număr vechi</dt><dd className="mono">{d.numarVechi}</dd></div>}{d.obiecteSecundare && <div><dt>Obiecte secundare</dt><dd>{d.obiecteSecundare}</dd></div>}</dl>
 
         <div className="alerta info"><Info size={20} aria-hidden="true" /><div><b>De ce apare la {denumire || 'această firmă'}:</b> {GRAD[d.potrivire].text}
