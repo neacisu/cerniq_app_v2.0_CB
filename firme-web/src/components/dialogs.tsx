@@ -6,13 +6,15 @@ import {
 import { useUi } from '../state/ui';
 import { useSettings } from '../state/settings';
 import { firmaKey, MAX_COMPARE, useLibrary, type FirmaRef } from '../state/library';
-import { useCautare } from '../api/hooks';
+import { useCautare, useDosar } from '../api/hooks';
 import { detectType, normalizeCui } from '../lib/cui';
 import { hrefFirma, mergeRezultate } from '../lib/merge';
 import { copyText, download, toCsv } from '../lib/export';
 import { Dialog } from './Dialog';
 import { SettingsForm } from './SettingsForm';
-import { Badge, Empty, Spinner } from './ui';
+import { Badge, Empty, ErrorBox, Spinner } from './ui';
+import { GRAD } from '../pages/CompanyDosare';
+import { dataRo } from '../lib/anaf';
 
 /* ───────── Paletă de comenzi ───────── */
 interface Cmd { id: string; group: string; label: string; sub?: string; icon: LucideIcon; run: () => void }
@@ -226,6 +228,43 @@ function CaenDialog({ clasa, denumire, versiune, ierarhie }: { clasa: string; de
   );
 }
 
+
+/* ───────── Detaliu dosar ───────── */
+function DosarDialog({ id, cui, cod, denumire }: { id: number; cui: string | null; cod: string | null; denumire: string }) {
+  const { close, toast } = useUi();
+  const q = useDosar(id, { cui, cod });
+  const d = q.data;
+  const legate = new Set(d?.legaturi.map((l) => l.parte));
+  const MOTIV: Record<string, string> = { denumire: 'căutare după denumirea firmei', reprezentant: 'căutare după numele unui reprezentant' };
+  return (
+    <Dialog title={d ? `Dosar ${d.numar}` : 'Dosar'} width={820} footer={<><button className="btn" onClick={async () => d && toast((await copyText(d.numar)) ? 'Număr copiat' : 'Nu am putut copia')} disabled={!d}><Copy size={18} aria-hidden="true" /> Copiază numărul</button><button className="btn btn-primary" onClick={close}>Închide</button></>}>
+      {q.isPending && <div className="row muted"><Spinner size={18} /> Se încarcă dosarul…</div>}
+      {q.isError && <ErrorBox error={q.error} compact />}
+      {d && (<>
+        <div className="row" style={{ gap: 6 }}><Badge tone="blue">{d.categorie}</Badge><Badge>{d.stadiu}</Badge><Badge tone={GRAD[d.potrivire].ton}>{GRAD[d.potrivire].eticheta}</Badge></div>
+        <p style={{ fontSize: 17, fontWeight: 600 }}>{d.obiect || 'Fără obiect publicat'}</p>
+        <dl className="kv"><div><dt>Instanță</dt><dd>{d.instanta}{d.departament ? ` · ${d.departament}` : ''}</dd></div><div><dt>Înregistrat</dt><dd>{dataRo(d.dataDosar) || '—'}</dd></div>
+          {d.dataInitiala && <div><dt>Data inițială</dt><dd>{dataRo(d.dataInitiala)}</dd></div>}{d.numarVechi && <div><dt>Număr vechi</dt><dd className="mono">{d.numarVechi}</dd></div>}{d.obiecteSecundare && <div><dt>Obiecte secundare</dt><dd>{d.obiecteSecundare}</dd></div>}</dl>
+
+        <div className="alerta info"><Info size={20} aria-hidden="true" /><div><b>De ce apare la {denumire || 'această firmă'}:</b> {GRAD[d.potrivire].text}
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{d.legaturi.map((l, i) => <li key={i}>Partea „{l.parte}” ({l.calitate}), găsită prin {MOTIV[l.motiv] ?? l.motiv} „{l.interogat}” · <b>{GRAD[l.grad].scurt}</b></li>)}</ul></div></div>
+
+        <h3 style={{ fontSize: 17 }}>Părți ({d.parti.length})</h3>
+        <div className="table-wrap"><table className="table"><thead><tr><th>#</th><th>Parte</th><th>Calitate</th></tr></thead>
+          <tbody>{d.parti.map((p) => <tr key={p.ord} style={legate.has(p.nume) ? { background: 'rgb(var(--accent-rgb) / .10)' } : undefined}><td className="mono">{p.ord}</td><td>{collapseTxt(p.nume)}{legate.has(p.nume) && <> <Badge tone="blue">legată de firmă</Badge></>}</td><td>{p.calitate}{p.calitateAnterioara ? <span className="faint"> (înainte: {p.calitateAnterioara})</span> : null}</td></tr>)}</tbody></table></div>
+
+        <h3 style={{ fontSize: 17 }}>Ședințe ({d.sedinte.length})</h3>
+        {d.sedinte.length === 0 ? <p className="muted">Nicio ședință publicată.</p> : <ol className="timeline">{d.sedinte.map((s, i) => (
+          <li key={i}><div className="row" style={{ gap: 8 }}><b>{dataRo(s.data) || 'Fără dată'}</b>{s.ora && <span className="mono faint">{s.ora}</span>}{s.complet && <Badge>{s.complet}</Badge>}{s.solutie && <Badge tone="violet">{s.solutie}</Badge>}</div>
+            {s.solutieSumar && <p className="muted" style={{ marginTop: 4 }}>{s.solutieSumar}</p>}{s.document && <p className="faint" style={{ fontSize: 13 }}>{s.document}{s.numarDocument ? ` nr. ${s.numarDocument}` : ''}{s.dataPronuntare ? ` · pronunțat ${dataRo(s.dataPronuntare)}` : ''}</p>}</li>))}</ol>}
+
+        {d.caiAtac.length > 0 && <><h3 style={{ fontSize: 17 }}>Căi de atac ({d.caiAtac.length})</h3><ul className="stack-sm" style={{ margin: 0, paddingLeft: 18 }}>{d.caiAtac.map((c, i) => <li key={i}><b>{c.tip ?? 'Cale de atac'}</b> · {dataRo(c.data) || 'fără dată'}{c.parte ? ` · declarată de ${collapseTxt(c.parte)}` : ''}</li>)}</ul></>}
+      </>)}
+    </Dialog>
+  );
+}
+const collapseTxt = (s: string) => s.replace(/\s+/g, ' ').trim();
+
 export function DialogHost() {
   const { dialog } = useUi();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -239,6 +278,7 @@ export function DialogHost() {
     case 'picker': return <PickerDialog />;
     case 'confirm': return <ConfirmDialog />;
     case 'help': return <HelpDialog />;
+    case 'dosar': return <DosarDialog id={p.id} cui={p.cui} cod={p.cod} denumire={p.denumire} />;
     case 'caen': return <CaenDialog clasa={p.clasa} denumire={p.denumire} versiune={p.versiune} ierarhie={p.ierarhie} />;
     default: return null;
   }

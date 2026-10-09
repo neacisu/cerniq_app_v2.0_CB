@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Ban, Download, ExternalLink, Info, Network, RotateCcw, Search, Users, Workflow } from 'lucide-react';
-import { useGrup } from '../api/hooks';
+import { useAnafLista, useGrup } from '../api/hooks';
 import type { GrafGrup, NodFirmaGrup, NodPersoanaGrup, ParamGrup } from '../api/types';
 import { collapse, titleCase } from '../lib/format';
 import { hrefFirma } from '../lib/merge';
 import { useUi } from '../state/ui';
 import { GrupGraf } from '../components/GrupGraf';
+import { PunctFiscal } from '../components/Fiscal';
 import type { ExportSection } from '../components/dialogs';
 import { Badge, Card, Empty, ErrorBox, Seg, Skeleton, Switch } from '../components/ui';
 
@@ -33,6 +34,9 @@ export function GrupTab({ cod, denumire }: { cod: string; cui: string | null; de
 
   const firme = useMemo(() => (graf?.noduri.filter((n): n is NodFirmaGrup => n.tip === 'firma') ?? []), [graf]);
   const persoane = useMemo(() => (graf?.noduri.filter((n): n is NodPersoanaGrup => n.tip === 'persoana') ?? []), [graf]);
+  const fiscal = useAnafLista(firme.map((f) => f.cui).filter((c): c is string => !!c));
+  const interogate = firme.filter((f) => f.cui && fiscal.data.get(f.cui)?.stare === 'gasit');
+  const problematice = interogate.filter((f) => { const r = fiscal.data.get(f.cui!); return r?.stareFiscala !== 'activ' && r?.stareFiscala !== 'necunoscut'; });
   const nod = graf && selected ? graf.noduri.find((n) => n.id === selected) : undefined;
   const neconf = graf && selected?.startsWith('u:') ? graf.neconfirmate[Number(selected.slice(2))] : undefined;
   const muchiiSlabe = graf?.muchii.filter((m) => m.slaba).length ?? 0;
@@ -91,11 +95,12 @@ export function GrupTab({ cod, denumire }: { cod: string; cui: string | null; de
                 {muchiiSlabe > 0 && <div className="alerta" role="note"><AlertTriangle size={20} aria-hidden="true" />
                   <div><b>{muchiiSlabe}</b> legături se bazează pe o dată <b>01/01</b> (linie întreruptă, portocaliu). Data 01/01 este foarte frecventă: două persoane diferite cu același nume pot fi lipite. Oprește „Date slabe” pentru a le scoate.</div></div>}
                 {firme.length === 1 && persoane.length <= 1 && <Empty icon={Users} title="Nicio altă firmă legată">Administratorii cu dată de naștere cunoscută nu mai apar la alte firme (în calitățile alese){graf.neconfirmate.length > 0 ? `. ${graf.neconfirmate.length} persoane fără dată confirmată nu pot fi unite cu alte firme.` : '.'}</Empty>}
-                <GrupGraf graf={graf} selected={selected} onSelect={setSelected} busy={q.isFetching} />
+                {interogate.length > 0 && <p className="row" role="status"><Badge tone={problematice.length > 0 ? 'red' : 'green'}>{problematice.length} din {interogate.length} firme cu stare fiscală ANAF problematică</Badge><span className="faint">(inactive, suspendate, în dizolvare sau radiate; {firme.length - interogate.length} fără date ANAF)</span></p>}
+                <GrupGraf graf={graf} selected={selected} onSelect={setSelected} busy={q.isFetching} fiscal={fiscal.data} />
                 <div className="legend-grup" aria-hidden="true">
                   <span><i className="c" style={{ background: 'var(--accent)' }} />Firma deschisă</span><span><i className="c" style={{ background: '#0ca678' }} />Alte firme</span>
                   <span><i className="d" style={{ background: '#7048e8' }} />Administrator</span><span><i className="d" style={{ background: '#e8890c' }} />Dată slabă</span>
-                  <span><i className="l" />Legătură</span><span><i className="l" style={{ borderTopStyle: 'dashed', borderColor: '#e8890c' }} />Dată slabă</span>
+                  <span><i className="c" style={{ border: '3px solid #e03131', background: 'transparent' }} />Stare fiscală problematică</span><span><i className="l" />Legătură</span><span><i className="l" style={{ borderTopStyle: 'dashed', borderColor: '#e8890c' }} />Dată slabă</span>
                   <span><i className="l" style={{ borderColor: '#ae3ec9' }} />Rol profesional</span><span><i className="l" style={{ borderTopStyle: 'dotted' }} />Neconfirmat</span>
                 </div>
                 <p className="hint">Trage pentru a muta, rotița sau butoanele pentru zoom, apasă un nod pentru detalii. Aceeași informație este în listele alăturate, pentru tastatură și cititoare de ecran.</p>
@@ -109,6 +114,7 @@ export function GrupTab({ cod, denumire }: { cod: string; cui: string | null; de
                   <p className="muted">{cap(neconf.calitate)}. {neconf.motiv === 'fara-data' ? 'Fără dată de naștere în registru, deci nu poate fi unit cu alte firme.' : 'Are dată 01/01, exclusă din filtru; nu mai este unit cu alte firme.'}</p></div>}
                 {nod?.tip === 'firma' && <div className="stack-sm"><b style={{ fontSize: 17 }}>{collapse(nod.denumire)}</b>
                   <div className="mono faint">{nod.cui ? `CUI ${nod.cui} · ` : ''}{nod.cod}</div>
+                  {nod.cui && <div><PunctFiscal r={fiscal.data.get(nod.cui)} /></div>}
                   <div className="stack-sm">{graf.muchii.filter((m) => m.firma === nod.id).map((m, i) => { const p = persDe(m.persoana); return p ? <div key={i} className="row" style={{ gap: 6 }}><button className="chip" onClick={() => setSelected(p.id)}>{titleCase(p.nume)}</button><span className="muted">{cap(m.calitate)}</span>{m.slaba && <Badge tone="amber">dată slabă</Badge>}</div> : null; })}</div>
                   <div className="row"><Link className="btn btn-sm btn-primary" to={hrefFirma({ cui: nod.cui, cod: nod.cod })}><ExternalLink size={16} aria-hidden="true" /> Deschide fișa</Link>
                     {!nod.radacina && <Link className="btn btn-sm" to={`${hrefFirma({ cui: nod.cui, cod: nod.cod })}?tab=grup`}><Network size={16} aria-hidden="true" /> Grupul de aici</Link>}</div></div>}

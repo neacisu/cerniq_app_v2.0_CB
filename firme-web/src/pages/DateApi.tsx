@@ -25,6 +25,10 @@ const ENDPOINTS: Ep[] = [
   { id: 'indicatori', titlu: '/indicatori/:an/:formular', path: (v) => `/indicatori/${encodeURIComponent(v.an ?? '')}/${encodeURIComponent(v.formular ?? '')}`, campuri: [{ k: 'an', label: 'an', def: '2024' }, { k: 'formular', label: 'formular', def: 'WEB_UU' }] },
   { id: 'stari', titlu: '/nomenclatoare/stari', path: () => '/nomenclatoare/stari', campuri: [] },
   { id: 'versiuni', titlu: '/nomenclatoare/versiuni-caen', path: () => '/nomenclatoare/versiuni-caen', campuri: [] },
+  { id: 'anaf', titlu: '/anaf/:cui', path: (v) => `/anaf/${encodeURIComponent(v.cui ?? '')}`, campuri: [{ k: 'cui', label: 'cui', def: '38926034' }] },
+  { id: 'anaf-lista', titlu: '/anaf?cui=a,b,c', path: (v) => `/anaf?cui=${encodeURIComponent(v.cui ?? '')}`, campuri: [{ k: 'cui', label: 'cui (separate prin virgulă, max 100)', def: '38926034,25629090' }] },
+  { id: 'dosare', titlu: '/dosare?cui=', path: (v) => `/dosare?cui=${encodeURIComponent(v.cui ?? '')}&limit=${encodeURIComponent(v.limit ?? '5')}`, campuri: [{ k: 'cui', label: 'cui', def: '38926034' }, { k: 'limit', label: 'limit', def: '5' }] },
+  { id: 'grup', titlu: '/grup/*', path: (v) => `/grup/${(v.cod ?? '').split('/').map(encodeURIComponent).join('/')}?adancime=${encodeURIComponent(v.adancime ?? '1')}`, campuri: [{ k: 'cod', label: 'cod înmatriculare', def: 'J9/150/2018' }, { k: 'adancime', label: 'adâncime (1–2)', def: '1' }] },
   { id: 'caen', titlu: '/nomenclatoare/caen', path: (v) => `/nomenclatoare/caen?versiune=${encodeURIComponent(v.versiune ?? '2')}${v.clasa ? `&clasa=${encodeURIComponent(v.clasa)}` : ''}`, campuri: [{ k: 'versiune', label: 'versiune', def: '2' }, { k: 'clasa', label: 'clasa', def: '4120' }] },
 ];
 
@@ -45,6 +49,13 @@ export default function DateApi() {
         <div className="stack">{VOLUME.map(([n, v, s]) => (
           <div key={n} className="stack-sm"><div className="row between nw"><span className="truncate">{n}</span><span className="mono nowrap">{fmtNum(v)} <span className="faint">· {s}</span></span></div><div className="bar"><i style={{ width: `${Math.max(1, (Math.log10(v) / Math.log10(MAX)) * 100)}%` }} /></div></div>))}</div>
         <p className="hint">Barele sunt pe scară logaritmică, ca tabelele mici să rămână vizibile.</p>
+      </Card>
+      <Card title="Straturi adăugate" icon={Database}>
+        <div className="table-wrap"><table className="table"><thead><tr><th>Strat</th><th>Conținut</th><th>Cheie</th><th>Proveniență</th></tr></thead><tbody>
+          <tr><td><b>ANAF v9</b></td><td>Stare fiscală, TVA și perioadele lui, TVA la încasare, split TVA, e-Factura, adrese, date generale. Peste 4,2 milioane de CUI găsite la 8 octombrie 2026; worker-ul continuă cu CUI-urile rămase și cu scanarea.</td><td className="mono">CUI + data_interogare</td><td>Interogare directă la ANAF, cu dată</td></tr>
+          <tr><td><b>Dosare</b></td><td>Dosare, părți, ședințe și căi de atac din portalul instanțelor. Se leagă de firmă după nume, cu gradul potrivirii.</td><td className="mono">dosar_legatura</td><td>Portal instanțe (potrivire după nume)</td></tr>
+          <tr><td><b>Graf administratori</b></td><td>Firmele legate prin același administrator (nume + dată naștere).</td><td className="mono">nume normalizat + dată</td><td>Registrul ONRC</td></tr></tbody></table></div>
+        <p className="hint">Straturile sunt separate: nimic din ele nu suprascrie un strat mai vechi; starea fiscală din ANAF v9 are prioritate la afișare, iar valoarea din snapshot rămâne vizibilă.</p>
       </Card>
       <Card title="Formulare de situații financiare" icon={Database}>
         <div className="table-wrap"><table className="table"><thead><tr><th>Cod</th><th>Conținut</th><th>Note</th></tr></thead>

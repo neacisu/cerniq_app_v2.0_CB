@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery, useQueries, type UseQueryResult } from '@tanstack/react-query';
 import { api, ApiError } from './client';
-import type { BilantToti, CuiResponse, InmatriculareResponse, ParamGrup } from './types';
+import type { BilantToti, CuiResponse, InmatriculareResponse, ParamGrup, AnafRezumat, FiltreDosare } from './types';
 
 const DAY = 24 * 60 * 60 * 1000;
 export const retry = (n: number, e: unknown) => !(e instanceof ApiError && e.status >= 400 && e.status < 500) && n < 2;
@@ -39,3 +39,22 @@ export type { InmatriculareResponse };
 /** Graful se reconstruiește din aceeași interogare la fiecare filtru; desenul anterior rămâne vizibil cât se încarcă cel nou. */
 export const useGrup = (cod: string | null, p: ParamGrup) =>
   useQuery({ queryKey: ['grup', cod, p], queryFn: ({ signal }) => api.grup(cod!, p, signal), enabled: !!cod, staleTime: 10 * 60_000, retry, placeholderData: keepPreviousData });
+
+/** Stare fiscală ANAF v9 pentru un CUI (null = nu se interoghează). */
+export const useAnaf = (cui: string | null) =>
+  useQuery({ queryKey: ['anaf', cui], queryFn: ({ signal }) => api.anaf(cui!, signal), enabled: !!cui, staleTime: 30 * 60_000, retry });
+
+/** Rezumate ANAF pentru liste, în pachete de 100 de CUI (limita API-ului). */
+export function useAnafLista(cuis: string[]): { data: Map<string, AnafRezumat>; isPending: boolean } {
+  const unice = [...new Set(cuis.filter(Boolean))].sort();
+  const pachete: string[][] = []; for (let i = 0; i < unice.length; i += 100) pachete.push(unice.slice(i, i + 100));
+  const rs = useQueries({ queries: pachete.map((p) => ({ queryKey: ['anaf-lista', p.join(',')], queryFn: ({ signal }: { signal: AbortSignal }) => api.anafLista(p, signal), staleTime: 30 * 60_000, retry })) });
+  const data = new Map<string, AnafRezumat>();
+  for (const r of rs) for (const x of r.data?.rezultate ?? []) data.set(x.cui, x);
+  return { data, isPending: rs.some((r) => r.isPending) };
+}
+
+export const useDosare = (t: { cui: string | null; cod: string | null }, f: FiltreDosare) =>
+  useQuery({ queryKey: ['dosare', t, f], queryFn: ({ signal }) => api.dosare(t, f, signal), enabled: !!(t.cui || t.cod), staleTime: 5 * 60_000, retry, placeholderData: keepPreviousData });
+export const useDosar = (id: number | null, t: { cui: string | null; cod: string | null }) =>
+  useQuery({ queryKey: ['dosar', id, t], queryFn: ({ signal }) => api.dosar(id!, t, signal), enabled: id !== null && !!(t.cui || t.cod), staleTime: 10 * 60_000, retry });

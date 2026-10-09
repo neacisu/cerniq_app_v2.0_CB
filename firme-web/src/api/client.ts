@@ -1,6 +1,6 @@
 import type {
   BilantAnResponse, BilantToti, CaenResponse, CautareResponse, CuiResponse, IndicatoriResponse,
-  InmatriculareResponse, StareNomenclator, VersiuneCaen, GrafGrup, ParamGrup,
+  InmatriculareResponse, StareNomenclator, VersiuneCaen, GrafGrup, ParamGrup, AnafFirma, AnafRezumat, DosareResponse, DosarDetaliu, FiltreDosare,
 } from './types';
 
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
@@ -40,9 +40,23 @@ export function queryGrup(p: ParamGrup): string {
   return q.toString();
 }
 
+export function queryDosare(t: { cui: string | null; cod: string | null }, f: FiltreDosare): string {
+  const q = new URLSearchParams();
+  if (t.cui) q.set('cui', t.cui); else if (t.cod) q.set('cod', t.cod);
+  for (const k of ['categorie', 'stadiu', 'rol', 'potrivire', 'q'] as const) { const v = f[k]; if (v) q.set(k, v); }
+  if (f.an) q.set('an', String(f.an));
+  if (f.doarExacte) q.set('doarExacte', 'true');
+  q.set('limit', String(f.limit)); q.set('offset', String(f.offset));
+  return q.toString();
+}
+
 export const api = {
   grup: (cod: string, p: ParamGrup, s?: AbortSignal) =>
     apiGet<GrafGrup>(`/grup/${cod.split('/').map(enc).join('/')}?${queryGrup(p)}`, s),
+  anaf: (cui: string, s?: AbortSignal) => apiGet<AnafFirma>(`/anaf/${enc(cui)}`, s),
+  anafLista: (cuis: string[], s?: AbortSignal) => apiGet<{ rezultate: AnafRezumat[] }>(`/anaf?cui=${cuis.map(enc).join(',')}`, s),
+  dosare: (t: { cui: string | null; cod: string | null }, f: FiltreDosare, s?: AbortSignal) => apiGet<DosareResponse>(`/dosare?${queryDosare(t, f)}`, s),
+  dosar: (id: number, t: { cui: string | null; cod: string | null }, s?: AbortSignal) => apiGet<DosarDetaliu>(`/dosare/${id}?${t.cui ? `cui=${enc(t.cui)}` : `cod=${enc(t.cod ?? '')}`}`, s),
   health: (s?: AbortSignal) => apiGet<{ stare: string }>('/health', s),
   cauta: (q: string, limit: number, s?: AbortSignal) => apiGet<CautareResponse>(`/firme?q=${enc(q)}&limit=${limit}`, s),
   cui: (cui: string, s?: AbortSignal) => apiGet<CuiResponse>(`/cui/${enc(cui)}`, s),

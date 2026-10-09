@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Briefcase, Building2, Download, Landmark, LineChart as LineIcon, MapPin, Network, Printer, ScrollText, Share2, Users } from 'lucide-react';
-import { useBilantToti, useCui, useInmatriculare } from '../api/hooks';
+import { Briefcase, Building2, Download, Gavel, History, LineChart as LineIcon, MapPin, Network, Printer, ScrollText, Share2, ShieldCheck, Users } from 'lucide-react';
+import { useAnaf, useBilantToti, useCui, useDosare, useInmatriculare } from '../api/hooks';
 import { ApiError } from '../api/client';
 import { adresaOnrc, adresaPlatitor, collapse, fmtLei, fmtNum, isYes, pctChange, titleCase } from '../lib/format';
 import { cuiUtilizabil, pathFirma } from '../lib/cui';
@@ -15,12 +15,18 @@ import { TrendChart } from '../components/TrendChart';
 import type { ExportSection } from '../components/dialogs';
 import { FinanciarTab } from './CompanyFinanciar';
 import { GrupTab } from './CompanyGrup';
+import { FiscalTab } from './CompanyFiscal';
+import { DosareTab } from './CompanyDosare';
+import { ContactCard, CronologieTab, SemnaleCard, StructuraCard } from './CompanyExtra';
+import { Prospetime, Sursa, StariFiscale as StariFiscaleChips } from '../components/Fiscal';
+import { STARE_FISCALA, STARE_TVA } from '../lib/anaf';
 import { Delta } from './Delta';
-import type { BilantToti, CuiResponse, FirmaOnrc, InmatriculareResponse, Platitor } from '../api/types';
+import type { AnafFirma, BilantToti, CuiResponse, FirmaOnrc, InmatriculareResponse, Platitor } from '../api/types';
 
 const TABS = [
   { value: 'prezentare', label: 'Prezentare', icon: Building2 }, { value: 'financiar', label: 'Financiar', icon: LineIcon },
-  { value: 'stari', label: 'Stări ONRC', icon: ScrollText }, { value: 'reprezentanti', label: 'Reprezentanți', icon: Users }, { value: 'grup', label: 'Grup', icon: Network }, { value: 'fiscal', label: 'Date ANAF', icon: Landmark },
+  { value: 'fiscal', label: 'Fiscal', icon: ShieldCheck }, { value: 'dosare', label: 'Dosare', icon: Gavel }, { value: 'cronologie', label: 'Cronologie', icon: History },
+  { value: 'stari', label: 'Stări ONRC', icon: ScrollText }, { value: 'reprezentanti', label: 'Reprezentanți', icon: Users }, { value: 'grup', label: 'Grup', icon: Network },
 ] as const;
 type TabId = (typeof TABS)[number]['value'];
 
@@ -53,14 +59,18 @@ export default function Company() {
   const inmByCui = useInmatriculare(!isInm ? cod : null);
   const inm: InmatriculareResponse | undefined = isInm ? inmByCod.data : inmByCui.data;
   const bilant = useBilantToti(cui && (cuiQ.data?.bilant.length ?? 0) > 0 ? cui : null);
+  const anafQ = useAnaf(cui);
+  const dosareSumar = useDosare({ cui, cod }, { limit: 1, offset: 0 });
+  const anaf: AnafFirma | undefined = anafQ.data;
 
   const platitor: Platitor | null = cuiQ.data?.platitor ?? inm?.platitori[0] ?? null;
   const onrc: FirmaOnrc[] = cuiQ.data?.inmatriculari?.length ? cuiQ.data.inmatriculari : inm?.firme ?? [];
-  const denumire = platitor?.denumire ?? onrc[0]?.denumire ?? '';
+  const anafOnly = !platitor && onrc.length === 0 && anaf?.stare === 'gasit';
+  const denumire = platitor?.denumire ?? onrc[0]?.denumire ?? (anaf?.stare === 'gasit' ? anaf.generale?.denumire ?? '' : '');
   const ref: FirmaRef = useMemo(() => ({ cui: cui ?? null, cod: cod ?? null, denumire }), [cui, cod, denumire]);
 
-  const primaryErr = isInm ? inmByCod.error : cuiQ.error;
-  const loadingMain = isInm ? inmByCod.isPending : cuiQ.isPending;
+  const primaryErr = isInm ? inmByCod.error : anaf?.stare === 'gasit' ? null : cuiQ.error;
+  const loadingMain = isInm ? inmByCod.isPending : cuiQ.isPending || (!!cuiQ.error && anafQ.isPending);
   useEffect(() => { if (denumire && (cui || cod)) addIstoric(ref); }, [denumire, cui, cod, ref, addIstoric]);
   useEffect(() => { if (denumire) document.title = `${titleCase(denumire)} · Firme Cerniq`; return () => { document.title = 'Firme Cerniq — registrul firmelor din România'; }; }, [denumire]);
   // Căutare după înmatriculare cu CUI utilizabil → URL canonic pe CUI.
@@ -69,26 +79,30 @@ export default function Company() {
   if (primaryErr && !denumire) return <div className="page"><ErrorBox error={primaryErr} onRetry={() => void (isInm ? inmByCod.refetch() : cuiQ.refetch())} /><Link to="/cauta" className="btn" style={{ alignSelf: 'center' }}>Înapoi la căutare</Link></div>;
   if (loadingMain || (isInm && !inmByCod.data)) return <CompanySkeleton />;
 
-  const tab: TabId = tabCerut === 'grup' && !cod ? 'prezentare' : tabCerut;
-  const taburi = TABS.filter((t) => t.value !== 'grup' || !!cod);
+  const taburi = TABS.filter((t) => (t.value !== 'grup' && t.value !== 'dosare') || (t.value === 'grup' ? !!cod : !!(cui || cod)));
+  const tab: TabId = !taburi.some((t) => t.value === tabCerut) ? 'prezentare' : tabCerut;
   const stari = inm?.stari ?? [];
   const ani = bilant.data?.ani ?? [];
   const statusBadges = (
-    <div className="row" style={{ gap: 6 }}>
-      {platitor && <Badge tone="blue">ANAF</Badge>}{onrc.length > 0 && <Badge tone="green">ONRC</Badge>}
-      {platitor?.stare && <Badge tone={/inregistrat/i.test(platitor.stare) ? 'green' : 'red'}>{titleCase(platitor.stare)}</Badge>}
-      {platitor && <Badge tone={isYes(platitor.tva) ? 'violet' : undefined}>{isYes(platitor.tva) ? 'Plătitor TVA' : 'Neplătitor TVA'}</Badge>}
-      {onrc[0]?.formaJuridica && <Badge>{onrc[0].formaJuridica}</Badge>}
-      {stari.filter((s) => stareTon(s.denumire)).slice(0, 2).map((s) => <Badge key={s.cod} tone={stareTon(s.denumire)}>{collapse(s.denumire)}</Badge>)}
+    <div className="stack-sm">
+      <div className="row" style={{ gap: 6 }}>
+        {(platitor || anaf?.stare === 'gasit') && <Badge tone="blue">ANAF</Badge>}{onrc.length > 0 && <Badge tone="green">ONRC</Badge>}
+        {onrc[0]?.formaJuridica && <Badge>{onrc[0].formaJuridica}</Badge>}
+        {stari.filter((s) => stareTon(s.denumire)).slice(0, 2).map((s) => <Badge key={s.cod} tone={stareTon(s.denumire)}>{collapse(s.denumire)}</Badge>)}
+      </div>
+      {anaf?.stare === 'gasit' ? <div className="row" style={{ gap: 8 }}><StariFiscaleChips anaf={anaf} /><Prospetime data={anaf.dataInterogare} /></div> : platitor && (
+        <div className="row" style={{ gap: 6 }}>{platitor.stare && <Badge tone={/inregistrat/i.test(platitor.stare) ? 'green' : 'red'}>{titleCase(platitor.stare)}</Badge>}<Badge tone={isYes(platitor.tva) ? 'violet' : undefined}>{isYes(platitor.tva) ? 'Plătitor TVA' : 'Neplătitor TVA'}</Badge>
+          <span className="sursa" title="Snapshot ANAF 2026: starea poate fi depășită">Snapshot ANAF 2026</span></div>)}
     </div>
   );
 
   const exportSections = (): ExportSection[] => {
-    const id: unknown[][] = [['Câmp', 'Valoare'], ['Denumire', denumire], ['CUI', cui ?? ''], ['Nr. înmatriculare', cod ?? ''], ['Stare ANAF', platitor?.stare ?? ''], ['Adresă', adresaPlatitor(platitor) || adresaOnrc(onrc[0])]];
+    const id: unknown[][] = [['Câmp', 'Valoare'], ['Denumire', denumire], ['CUI', cui ?? ''], ['Nr. înmatriculare', cod ?? ''], ['Stare ANAF (v9, altfel snapshot)', anaf?.stare === 'gasit' ? anaf.stareFiscala ?? '' : platitor?.stare ?? ''], ['Adresă', adresaPlatitor(platitor) || adresaOnrc(onrc[0])]];
     const fin: unknown[][] = [['An', 'Formular', 'Cod', 'Indicator', 'Valoare', 'UM']];
     ani.forEach((a) => a.formulare.forEach((f) => f.indicatori.forEach((i) => fin.push([a.an, f.formular, i.cod, collapse(i.denumire), i.valoare, unitFor(i.denumire)]))));
     return [
       { id: 'identificare', label: 'Identificare', rows: id, json: { denumire, cui, codInmatriculare: cod, platitor, onrc } },
+      ...(anaf?.stare === 'gasit' ? [{ id: 'anaf', label: 'Stare fiscală ANAF v9', rows: [['Câmp', 'Valoare'], ['Stare fiscală', anaf.stareFiscala ?? ''], ['TVA', anaf.tva ?? ''], ['Inactiv din', anaf.inactiv?.dataInactivare ?? ''], ['Reactivat', anaf.inactiv?.dataReactivare ?? ''], ['e-Factura din', anaf.eFactura?.data ?? ''], ['Interogat la', anaf.dataInterogare ?? ''], ...(anaf.tvaDetaliu?.perioade ?? []).map((p) => [`Perioadă TVA ${p.ordine + 1}`, `${p.inceput ?? ''} – ${p.sfarsit ?? 'în curs'}`])], json: anaf }] : []),
       { id: 'financiar', label: 'Situații financiare', rows: fin, json: ani },
       { id: 'stari', label: 'Stări ONRC', rows: [['Cod', 'Denumire'], ...stari.map((s) => [s.cod, collapse(s.denumire)])], json: stari },
       { id: 'reprezentanti', label: 'Reprezentanți legali', rows: [['Nume', 'Calitate', 'Data nașterii'], ...(inm?.reprezentantiLegali ?? []).map((r) => [r.persoanaImputernicita, r.calitate, r.dataNastere])], json: inm?.reprezentantiLegali ?? [] },
@@ -103,7 +117,7 @@ export default function Company() {
           {statusBadges}
           <h1>{denumire || 'Firmă'}</h1>
           <div className="company-id">{cui && <span>CUI {cui}</span>}{cod && <span>{cod}</span>}{onrc[0]?.euid && <span className="hide-sm">{onrc[0].euid}</span>}</div>
-          {(platitor || onrc[0]) && <p className="muted row nw" style={{ alignItems: 'flex-start' }}><MapPin size={18} aria-hidden="true" style={{ flex: 'none', marginTop: 3 }} />{adresaPlatitor(platitor) || adresaOnrc(onrc[0])}</p>}
+          {(platitor || onrc[0] || anafOnly) && <p className="muted row nw" style={{ alignItems: 'flex-start' }}><MapPin size={18} aria-hidden="true" style={{ flex: 'none', marginTop: 3 }} />{adresaPlatitor(platitor) || adresaOnrc(onrc[0]) || anaf?.generale?.adresa}</p>}
         </div>
         <div className="company-actions no-print">
           <FavButton f={ref} label /><CmpButton f={ref} label />
@@ -118,12 +132,14 @@ export default function Company() {
           options={taburi.map((t) => ({ value: t.value, label: <><t.icon size={18} aria-hidden="true" />{t.label}</> }))} />
       </div>
 
-      {tab === 'prezentare' && <Prezentare platitor={platitor} onrc={onrc} cui={cui} stari={stari} bilant={bilant.data} bilantLoading={bilant.isPending && !!cui && (cuiQ.data?.bilant.length ?? 0) > 0} cuiData={cuiQ.data} go={(t) => setSp({ tab: t })} compact={settings.compactNumbers} />}
+      {tab === 'prezentare' && <Prezentare anaf={anaf} nrDosare={dosareSumar.data?.totalFirma ?? null} platitor={platitor} onrc={onrc} cui={cui} stari={stari} bilant={bilant.data} bilantLoading={bilant.isPending && !!cui && (cuiQ.data?.bilant.length ?? 0) > 0} cuiData={cuiQ.data} go={(t) => setSp({ tab: t })} compact={settings.compactNumbers} />}
       {tab === 'financiar' && <FinanciarTab cui={cui} ani={ani} loading={bilant.isPending && !!cui} error={bilant.error} noData={!!cuiQ.data && cuiQ.data.bilant.length === 0} denumire={denumire} exportFin={() => open('export', { titlu: `${denumire}: situații financiare`, fisier: `bilant-${cui}`, sectiuni: exportSections().filter((s) => s.id === 'financiar') })} />}
       {tab === 'stari' && <StariTab stari={stari} loading={isInm ? false : inmByCui.isPending} error={inmByCui.error} cod={cod} />}
       {tab === 'reprezentanti' && <ReprezentantiTab inm={inm} loading={isInm ? false : inmByCui.isPending} error={inmByCui.error} />}
       {tab === 'grup' && cod && <GrupTab cod={cod} cui={cui} denumire={denumire} />}
-      {tab === 'fiscal' && <FiscalTab p={platitor} loading={!platitor && cuiQ.isPending} />}
+      {tab === 'fiscal' && <FiscalTab anaf={anaf} loading={anafQ.isPending && !!cui} error={anafQ.error} snapshot={platitor} onrc={onrc[0]} aniBilant={ani.map((a) => a.an)} />}
+      {tab === 'dosare' && <DosareTab cui={cui} cod={cod} denumire={denumire} />}
+      {tab === 'cronologie' && <CronologieTab cui={cui} cod={cod} onrc={onrc[0]} anaf={anaf} aniBilant={ani.map((a) => a.an)} stari={stari} />}
     </div>
   );
 }
@@ -136,8 +152,8 @@ function CompanySkeleton() {
   );
 }
 
-function Prezentare({ platitor, onrc, cui, stari, bilant, bilantLoading, cuiData, go, compact }: {
-  platitor: Platitor | null; onrc: FirmaOnrc[]; cui: string | null; stari: InmatriculareResponse['stari']; bilant?: BilantToti; bilantLoading: boolean; cuiData?: CuiResponse; go: (t: TabId) => void; compact: boolean;
+function Prezentare({ anaf, nrDosare, platitor, onrc, cui, stari, bilant, bilantLoading, cuiData, go, compact }: {
+  anaf: AnafFirma | undefined; nrDosare: number | null; platitor: Platitor | null; onrc: FirmaOnrc[]; cui: string | null; stari: InmatriculareResponse['stari']; bilant?: BilantToti; bilantLoading: boolean; cuiData?: CuiResponse; go: (t: TabId) => void; compact: boolean;
 }) {
   const ani = bilant?.ani ?? [];
   const sorted = [...ani].sort((a, b) => b.an - a.an);
@@ -165,10 +181,9 @@ function Prezentare({ platitor, onrc, cui, stari, bilant, bilantLoading, cuiData
         <div className="main-col stack-lg">
           <Card title="Identificare" icon={Briefcase}>
             <KV items={[
-              ['Denumire', platitor?.denumire ?? onrc[0]?.denumire], ['CUI', cui && <span className="mono">{cui}</span>], ['Nr. înmatriculare', onrc[0] && <span className="mono">{onrc[0].codInmatriculare}</span>],
+              ['Denumire', platitor?.denumire ?? onrc[0]?.denumire ?? anaf?.generale?.denumire], ['CUI', cui && <span className="mono">{cui}</span>], ['Nr. înmatriculare', onrc[0] && <span className="mono">{onrc[0].codInmatriculare}</span>],
               ['EUID', onrc[0] && <span className="mono">{onrc[0].euid}</span>], ['Formă juridică', onrc[0]?.formaJuridica], ['Data înmatriculării', onrc[0]?.dataInmatriculare],
-              ['Stare ANAF', platitor && collapse(platitor.stare)], ['Plătitor TVA', platitor && (isYes(platitor.tva) ? 'Da' : 'Nu')], ['Telefon', platitor?.telefon], ['Site web', onrc[0]?.web],
-              ['Țara firmei-mamă', onrc[0]?.taraFirmaMama],
+              ['Stare fiscală', anaf?.stare === 'gasit' ? <span key="sf">{STARE_FISCALA[anaf.stareFiscala ?? 'necunoscut'].eticheta} <Sursa nume="ANAF v9" data={anaf.dataInterogare} /></span> : platitor && <span key="sn">{collapse(platitor.stare)} <Sursa nume="Snapshot ANAF 2026" /></span>], ['Plătitor TVA', anaf?.stare === 'gasit' ? STARE_TVA[anaf.tva ?? 'necunoscut'].eticheta : platitor && (isYes(platitor.tva) ? 'Da' : 'Nu')], ['Țara firmei-mamă', onrc[0]?.taraFirmaMama],
             ]} />
             {onrc.length > 1 && <Badge tone="amber">{onrc.length} înmatriculări asociate acestui CUI. Se afișează prima.</Badge>}
           </Card>
@@ -179,6 +194,8 @@ function Prezentare({ platitor, onrc, cui, stari, bilant, bilantLoading, cuiData
             </Card>)}
         </div>
         <div className="side-col">
+          <SemnaleCard anaf={anaf} stari={stari} aniBilant={ani.map((a) => a.an)} nrDosare={nrDosare} />
+          <ContactCard platitor={platitor} onrc={onrc[0]} anaf={anaf} />
           <Card title="Stări ONRC" icon={ScrollText} actions={<button className="btn btn-sm btn-ghost" onClick={() => go('stari')}>Toate</button>}>
             {stari.length === 0 ? <p className="muted">Nicio stare specială înregistrată.</p> : <div className="stack-sm">{stari.slice(0, 4).map((s) => <div key={s.cod} className="row nw" style={{ alignItems: 'flex-start' }}><Badge tone={stareTon(s.denumire)}>{s.cod}</Badge><span>{collapse(s.denumire)}</span></div>)}</div>}
           </Card>
@@ -205,12 +222,13 @@ function StariTab({ stari, loading, error, cod }: { stari: InmatriculareResponse
 
 function initials(n: string) { return collapse(n).split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase() || '?'; }
 function ReprezentantiTab({ inm, loading, error }: { inm?: InmatriculareResponse; loading: boolean; error: unknown }) {
+  const structura = <StructuraCard inm={inm} />;
   if (loading) return <div className="glass card"><SkeletonLines n={4} /></div>;
   if (error && !inm) return <ErrorBox error={error} />;
   const rl = inm?.reprezentantiLegali ?? [], ri = inm?.reprezentantiIf ?? [], su = inm?.sucursale ?? [];
-  if (!rl.length && !ri.length && !su.length) return <div className="glass card"><Empty icon={Users} title="Fără reprezentanți publicați">Registrul nu conține reprezentanți sau sucursale pentru această firmă.</Empty></div>;
+  if (!rl.length && !ri.length && !su.length) return <div className="stack-lg"><div className="glass card"><Empty icon={Users} title="Fără reprezentanți publicați">Registrul nu conține reprezentanți sau sucursale pentru această firmă.</Empty></div>{structura}</div>;
   return (
-    <div className="grid-2">
+    <div className="stack-lg"><div className="grid-2">
       <Card title={`Reprezentanți legali (${rl.length})`} icon={Users}>
         {rl.length === 0 ? <p className="muted">Niciunul publicat.</p> : rl.map((r, i) => (
           <div className="person" key={i}><span className="avatar" aria-hidden="true">{initials(r.persoanaImputernicita)}</span>
@@ -225,27 +243,6 @@ function ReprezentantiTab({ inm, loading, error }: { inm?: InmatriculareResponse
       {su.length > 0 && <Card title={`Sucursale în alte state membre (${su.length})`} icon={Building2} className="" >
         <div className="table-wrap"><table className="table"><thead><tr><th>Sucursală</th><th>Țara</th><th>Cod fiscal</th><th>EUID</th></tr></thead>
           <tbody>{su.map((s, i) => <tr key={i}><td>{s.denumireSucursala}</td><td>{s.tara}</td><td className="mono">{s.codFiscal}</td><td className="mono">{s.euid}</td></tr>)}</tbody></table></div></Card>}
-    </div>
-  );
-}
-
-function FiscalTab({ p, loading }: { p: Platitor | null; loading: boolean }) {
-  if (loading) return <div className="glass card"><SkeletonLines n={6} /></div>;
-  if (!p) return <div className="glass card"><Empty icon={Landmark} title="Firma nu apare în snapshot-ul ANAF">Sunt disponibile doar datele din registrul ONRC.</Empty></div>;
-  const vec = Object.entries(p).filter(([k]) => /^(imp|cont|accize)\d+/i.test(k)).map(([k, v]) => [k.replace(/^(imp|cont|accize)/i, (m) => m.toUpperCase()), collapse(v)] as const);
-  return (
-    <div className="stack-lg">
-      <Card title="Date de identificare ANAF" icon={Landmark}>
-        <KV items={[
-          ['Cod fiscal', <span className="mono" key="c">{p.codFiscal}</span>], ['Tip unitate', p.tipUnitate], ['Tip contribuabil', p.tipContrib], ['Cod fiscal părinte', p.codFiscalParinte],
-          ['Număr registrul comerțului', p.judetComert && `${p.judetComert}/${p.nrComert}/${p.anComert}`], ['Act de autorizare', p.actAutorizare],
-          ['Data înregistrării', p.dataInregistrare], ['Starea la data', p.dataStare], ['Data radierii', p.dataRadiere], ['Ultima prelucrare', p.dataPrelucrare], ['Fax', p.fax], ['Telefon', p.telefon],
-        ]} />
-      </Card>
-      <Card title="Vector fiscal" icon={Landmark}>
-        <p className="muted">Obligațiile fiscale înregistrate (cod impozit/contribuție). Cele active sunt evidențiate.</p>
-        <div className="vector">{vec.map(([k, v]) => <div key={k} className={v === 'DA' ? 'yes' : ''}><span className="mono">{k}</span><b>{v || '—'}</b></div>)}</div>
-      </Card>
-    </div>
+    </div>{structura}</div>
   );
 }

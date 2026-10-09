@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Download, GitCompareArrows, Plus, Share2, Trash2, X } from 'lucide-react';
-import { useBilanturi, useCuiMulti } from '../api/hooks';
+import { useAnafLista, useBilanturi, useCuiMulti } from '../api/hooks';
 import { isCui } from '../lib/cui';
 import { findMetric, METRICI, metricById, primaryFormular } from '../lib/indicators';
 import { download, toCsv } from '../lib/export';
 import { collapse, fmtLei, fmtNum, titleCase } from '../lib/format';
 import { MAX_COMPARE, useLibrary } from '../state/library';
 import { useUi } from '../state/ui';
-import { Empty, PageHead, Seg, Skeleton } from '../components/ui';
+import { Badge, Empty, PageHead, Seg, Skeleton } from '../components/ui';
+import { PunctFiscal, Sursa } from '../components/Fiscal';
+import { dataRo, STARE_TVA } from '../lib/anaf';
 import { PALETA, TrendChart } from '../components/TrendChart';
 import { Link } from 'react-router-dom';
 import { pathFirma } from '../lib/cui';
@@ -22,6 +24,7 @@ export default function Compare() {
   const cuis = fromUrl ? urlCuis : compare.map((c) => c.cui).filter((c): c is string => !!c);
   const meta = useCuiMulti(cuis);
   const bil = useBilanturi(cuis);
+  const fiscal = useAnafLista(cuis);
   const [metricId, setMetricId] = useState('ca');
   const [tip, setTip] = useState<'line' | 'bar'>('line');
   const metric = metricById(metricId);
@@ -77,6 +80,13 @@ export default function Compare() {
             {loading ? <Skeleton h={280} r={18} /> : anyData ? <TrendChart serii={serii} tip={tip} unitate={metric.tip === 'lei' ? 'lei' : ''} altText={`Comparație ${metric.eticheta} între ${nume.join(', ')}`} />
               : <Empty icon={GitCompareArrows} title="Nu există valori pentru acest indicator">Încearcă alt indicator sau alte firme. Unele formulare nu raportează toți indicatorii.</Empty>}
           </section>
+          <section className="glass card stack"><div className="row between"><h2 className="card-title">Stare fiscală ANAF</h2><Sursa nume="ANAF v9" data={[...fiscal.data.values()].find((x) => x.dataInterogare)?.dataInterogare} /></div>
+            <div className="table-wrap"><table className="table"><thead><tr><th>Firmă</th><th>Stare fiscală</th><th>TVA</th><th>e-Factura</th><th>Inactiv din</th></tr></thead>
+              <tbody>{cuis.map((c, i) => { const r = fiscal.data.get(c); return (
+                <tr key={c}><td><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: PALETA[i % PALETA.length], marginRight: 6 }} />{nume[i]}</td>
+                  <td>{fiscal.isPending ? '…' : <PunctFiscal r={r} />}</td><td>{r?.stare === 'gasit' ? <Badge tone={STARE_TVA[r.tva ?? 'necunoscut'].ton}>{STARE_TVA[r.tva ?? 'necunoscut'].eticheta}</Badge> : '—'}</td>
+                  <td>{r?.stare === 'gasit' ? (r.eFactura ? 'Da' : 'Nu') : '—'}</td><td>{dataRo(r?.dataInactivare) || '—'}</td></tr>); })}</tbody></table></div>
+            <p className="hint">Starea fiscală este cea din ANAF v9, interogat direct; poate diferi de ce arată bilanțul sau registrul.</p></section>
           {anyData && (
             <section className="glass card stack"><h2 className="card-title">Tabel pe ani</h2>
               <div className="table-wrap"><table className="table"><thead><tr><th>An</th>{serii.map((s) => <th key={s.id} className="num"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: s.color, marginRight: 6 }} />{s.nume}</th>)}</tr></thead>

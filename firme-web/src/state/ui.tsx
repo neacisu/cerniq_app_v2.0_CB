@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-export type DialogId = 'palette' | 'settings' | 'shortcuts' | 'share' | 'export' | 'picker' | 'confirm' | 'caen' | 'help';
+export type DialogId = 'palette' | 'settings' | 'shortcuts' | 'share' | 'export' | 'picker' | 'confirm' | 'caen' | 'help' | 'dosar';
 export interface ToastItem { id: number; text: string; tone: 'ok' | 'info' | 'err'; action?: { label: string; run: () => void } }
 export interface ConfirmOpts { titlu: string; text: string; confirmare: string; periculos?: boolean; onConfirm: () => void }
 export interface DialogState { id: DialogId | null; props?: Record<string, unknown> }

@@ -5,6 +5,8 @@ import { hrefFirma } from '../lib/merge';
 import { firmaKey, MAX_COMPARE, useLibrary, type FirmaRef } from '../state/library';
 import { useUi } from '../state/ui';
 import { Badge } from './ui';
+import { PunctFiscal } from './Fiscal';
+import type { AnafRezumat } from '../api/types';
 
 export function useFirmaActions() {
   const lib = useLibrary();
@@ -43,13 +45,14 @@ export function CmpButton({ f, label }: { f: FirmaRef; label?: boolean }) {
   );
 }
 
-export function ResultCard({ f }: { f: FirmaRez }) {
+export function ResultCard({ f, anaf }: { f: FirmaRez; anaf?: AnafRezumat }) {
   const ref: FirmaRef = { cui: f.cui, cod: f.cod, denumire: f.denumire };
   return (
     <article className="result glass live">
       <div className="grow stack-sm" style={{ minWidth: 220 }}>
         <div className="row" style={{ gap: 6 }}>
           {f.surse.includes('anaf') && <Badge tone="blue">ANAF</Badge>}{f.surse.includes('onrc') && <Badge tone="green">ONRC</Badge>}
+          <PunctFiscal r={anaf} />
         </div>
         <h3><Link to={hrefFirma(f)} className="stretch">{f.denumire}</Link></h3>
         <div className="meta">{f.cui && <span className="mono">CUI {f.cui}</span>}{f.cod && <span className="mono">{f.cod}</span>}</div>

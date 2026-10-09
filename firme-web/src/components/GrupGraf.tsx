@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
-import type { GrafGrup } from '../api/types';
+import type { AnafRezumat, GrafGrup } from '../api/types';
 import { asaza, limite, type LNod, type Poz } from '../lib/layout';
 import { collapse } from '../lib/format';
 
@@ -11,9 +11,9 @@ const fit = (poz: Map<string, Poz>, ratio: number): VB => {
   return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
 };
 
-export interface NodDesen { id: string; tip: 'firma' | 'persoana' | 'neconfirmat'; eticheta: string; nivel: number; radacina?: boolean; slaba?: boolean }
+export interface NodDesen { id: string; tip: 'firma' | 'persoana' | 'neconfirmat'; eticheta: string; nivel: number; radacina?: boolean; slaba?: boolean; cui?: string | null }
 
-export function GrupGraf({ graf, selected, onSelect, busy }: { graf: GrafGrup; selected: string | null; onSelect: (id: string | null) => void; busy: boolean }) {
+export function GrupGraf({ graf, selected, onSelect, busy, fiscal }: { graf: GrafGrup; selected: string | null; onSelect: (id: string | null) => void; busy: boolean; fiscal?: Map<string, AnafRezumat> }) {
   const box = useRef<HTMLDivElement>(null);
   const [px, setPx] = useState(800);
   const [hover, setHover] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export function GrupGraf({ graf, selected, onSelect, busy }: { graf: GrafGrup; s
   const { noduri, muchii, poz } = useMemo(() => {
     const radacina = graf.noduri.find((n) => n.tip === 'firma' && n.radacina);
     const noduri: NodDesen[] = graf.noduri.map((n) => (n.tip === 'firma'
-      ? { id: n.id, tip: 'firma', eticheta: collapse(n.denumire), nivel: n.nivel, radacina: n.radacina }
+      ? { id: n.id, tip: 'firma', eticheta: collapse(n.denumire), nivel: n.nivel, radacina: n.radacina, cui: n.cui }
       : { id: n.id, tip: 'persoana', eticheta: collapse(n.nume), nivel: n.nivel, slaba: n.slaba }));
     const muchii: { a: string; b: string; slaba: boolean; strat: string; neconfirmata: boolean }[] = graf.muchii.map((m) => ({ a: m.persoana, b: m.firma, slaba: m.slaba, strat: m.strat, neconfirmata: false }));
     graf.neconfirmate.forEach((u, i) => { if (!radacina) return; noduri.push({ id: `u:${i}`, tip: 'neconfirmat', eticheta: collapse(u.nume), nivel: 0 }); muchii.push({ a: `u:${i}`, b: radacina.id, slaba: false, strat: u.strat, neconfirmata: true }); });
@@ -105,9 +105,11 @@ export function GrupGraf({ graf, selected, onSelect, busy }: { graf: GrafGrup; s
             const p = poz.get(n.id); if (!p) return null;
             const r = (n.radacina ? 15 : n.tip === 'firma' ? 8 : 9) * Math.max(0.7, Math.min(2.2, scara * 1.1));
             const dim = !!activ && !vecini.has(n.id);
-            const cls = `gn ${n.radacina ? 'radacina' : n.tip}${n.slaba ? ' slaba' : ''}${selected === n.id ? ' sel' : ''}${dim ? ' dim' : ''}`;
+            const fr = n.cui ? fiscal?.get(n.cui) : undefined;
+            const stareF = fr?.stare === 'gasit' ? fr.stareFiscala : undefined;
+            const cls = `gn ${n.radacina ? 'radacina' : n.tip}${n.slaba ? ' slaba' : ''}${stareF && stareF !== 'activ' && stareF !== 'necunoscut' ? ' problema' : ''}${selected === n.id ? ' sel' : ''}${dim ? ' dim' : ''}`;
             return (
-              <g key={n.id} transform={`translate(${p.x} ${p.y})`} className={cls} tabIndex={0} role="button" aria-label={`${n.tip === 'firma' ? 'Firma' : n.tip === 'persoana' ? 'Persoana' : 'Persoană neconfirmată'} ${n.eticheta}`} aria-pressed={selected === n.id}
+              <g key={n.id} transform={`translate(${p.x} ${p.y})`} className={cls} tabIndex={0} role="button" aria-label={`${n.tip === 'firma' ? 'Firma' : n.tip === 'persoana' ? 'Persoana' : 'Persoană neconfirmată'} ${n.eticheta}${stareF && stareF !== 'activ' && stareF !== 'necunoscut' ? ', stare fiscală problematică' : ''}`} aria-pressed={selected === n.id}
                 onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onSelect(selected === n.id ? null : n.id); }}
                 onPointerEnter={() => setHover(n.id)} onPointerLeave={() => setHover(null)} onFocus={() => setHover(n.id)} onBlur={() => setHover(null)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(selected === n.id ? null : n.id); } }}>
