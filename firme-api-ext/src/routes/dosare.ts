@@ -134,7 +134,7 @@ export const dosareRoutes: FastifyPluginAsync = async (app) => {
     const x = d.rows[0];
     if (!x) throw new ApiError(404, "Dosarul nu a fost găsit");
     return {
-      id, ...lista,
+      ...lista,
       numarVechi: (x.numar_vechi as string | null) || null, departament: String(x.departament ?? ""), obiecteSecundare: (x.obiecte_secundare as string | null) || null, dataInitiala: (x.data_initiala as string | null) ?? null,
       parti: parti.rows.map((p) => ({ ord: Number(p.ord), nume: String(p.nume ?? ""), calitate: String(p.calitate ?? ""), calitateAnterioara: (p.calitate_anterioara as string | null) || null, dataCalitate: (p.data_calitate as string | null) ?? null })),
       sedinte: sedinte.rows.map((x2) => ({ data: (x2.data_sedinta as string | null) ?? null, ora: (x2.ora as string | null) || null, complet: (x2.complet as string | null) || null, solutie: (x2.solutie as string | null) || null, solutieSumar: (x2.solutie_sumar as string | null) || null, dataPronuntare: (x2.data_pronuntare as string | null) ?? null, document: (x2.document_nume as string | null) || null, numarDocument: (x2.numar_document as string | null) || null, dataDocument: (x2.data_document as string | null) ?? null })),
