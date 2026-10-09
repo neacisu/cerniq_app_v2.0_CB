@@ -52,7 +52,7 @@ export function GrupTab({ cod, denumire }: { cod: string; cui: string | null; de
   const exporta = () => {
     if (!graf) return;
     const sectiuni: ExportSection[] = [
-      { id: 'firme', label: 'Firme din grup', rows: [['Nivel', 'Denumire', 'CUI', 'Nr. înmatriculare'], ...firme.map((f) => [f.nivel, collapse(f.denumire), f.cui ?? '', f.cod])], json: firme },
+      { id: 'firme', label: 'Firme din grup', rows: [['Nivel', 'Denumire', 'CUI', 'Nr. înmatriculare (toate)', 'CUI partajat'], ...firme.map((f) => [f.nivel, collapse(f.denumire), f.cui ?? '', f.coduri.join('; '), f.cuiPartajat ? 'da' : 'nu'])], json: firme },
       { id: 'persoane', label: 'Administratori (nume + dată naștere)', rows: [['Nume', 'Data nașterii', 'Dată slabă', 'Nr. firme (total)', 'Calități'], ...persoane.map((p) => [titleCase(p.nume), p.data, p.slaba ? 'da' : 'nu', p.nrFirme, p.calitati.join('; ')])], json: persoane },
       { id: 'legaturi', label: 'Legături persoană–firmă', rows: [['Persoană', 'Data nașterii', 'Firmă', 'Nr. înmatriculare', 'Calitate', 'Strat', 'Dată slabă'], ...graf.muchii.map((m) => { const p = persDe(m.persoana), f = firmaDe(m.firma); return [p ? titleCase(p.nume) : '', p?.data ?? '', f ? collapse(f.denumire) : '', f?.cod ?? '', m.calitate, m.strat, m.slaba ? 'da' : 'nu']; })], json: graf.muchii },
       { id: 'neconfirmate', label: 'Neconfirmați (fără dată de naștere sau dată slabă exclusă)', rows: [['Nume', 'Calitate', 'Motiv'], ...graf.neconfirmate.map((u) => [titleCase(u.nume), u.calitate, u.motiv === 'fara-data' ? 'fără dată de naștere' : 'dată slabă exclusă'])], json: graf.neconfirmate },
@@ -113,7 +113,9 @@ export function GrupTab({ cod, denumire }: { cod: string; cui: string | null; de
                 {neconf && <div className="stack-sm"><b>{titleCase(neconf.nume)}</b><Badge tone="amber">neconfirmat</Badge>
                   <p className="muted">{cap(neconf.calitate)}. {neconf.motiv === 'fara-data' ? 'Fără dată de naștere în registru, deci nu poate fi unit cu alte firme.' : 'Are dată 01/01, exclusă din filtru; nu mai este unit cu alte firme.'}</p></div>}
                 {nod?.tip === 'firma' && <div className="stack-sm"><b style={{ fontSize: 17 }}>{collapse(nod.denumire)}</b>
-                  <div className="mono faint">{nod.cui ? `CUI ${nod.cui} · ` : ''}{nod.cod}</div>
+                  <div className="mono faint">{nod.cui ? `CUI ${nod.cui} · ` : ''}{nod.coduri.join(' · ')}</div>
+                  {nod.coduri.length > 1 && <p className="hint">{nod.coduri.length} numere de înmatriculare pentru aceeași firmă (mutări de sediu între județe). CUI-ul și denumirea sunt aceleași, deci este un singur nod.</p>}
+                  {nod.cuiPartajat && <div className="alerta" role="note"><AlertTriangle size={18} aria-hidden="true" /><div>Acest CUI apare în sursă și la o firmă cu altă denumire. Nu le-am contopit; verifică la ONRC.</div></div>}
                   {nod.cui && <div><PunctFiscal r={fiscal.data.get(nod.cui)} /></div>}
                   <div className="stack-sm">{graf.muchii.filter((m) => m.firma === nod.id).map((m, i) => { const p = persDe(m.persoana); return p ? <div key={i} className="row" style={{ gap: 6 }}><button className="chip" onClick={() => setSelected(p.id)}>{titleCase(p.nume)}</button><span className="muted">{cap(m.calitate)}</span>{m.slaba && <Badge tone="amber">dată slabă</Badge>}</div> : null; })}</div>
                   <div className="row"><Link className="btn btn-sm btn-primary" to={hrefFirma({ cui: nod.cui, cod: nod.cod })}><ExternalLink size={16} aria-hidden="true" /> Deschide fișa</Link>
@@ -163,7 +165,7 @@ export function GrupTab({ cod, denumire }: { cod: string; cui: string | null; de
               const f = firme.filter((x) => !filtruFirme || `${x.denumire} ${x.cui ?? ''} ${x.cod}`.toLowerCase().includes(filtruFirme.toLowerCase()));
               return <><div className="stack-sm" role="list">{f.slice(0, maxFirme).map((x) => (
                 <div key={x.id} role="listitem" className="listrow" aria-current={selected === x.id}>
-                  <button className="pick" onClick={() => setSelected(x.id)} aria-label={`Selectează ${collapse(x.denumire)}`}><div className="truncate" style={{ fontWeight: 600 }}>{collapse(x.denumire)}</div><div className="mono faint" style={{ fontSize: 13 }}>{x.cui ? `CUI ${x.cui} · ` : ''}{x.cod}</div></button>
+                  <button className="pick" onClick={() => setSelected(x.id)} aria-label={`Selectează ${collapse(x.denumire)}`}><div className="truncate" style={{ fontWeight: 600 }}>{collapse(x.denumire)}</div><div className="mono faint" style={{ fontSize: 13 }}>{x.cui ? `CUI ${x.cui} · ` : ''}{x.coduri.join(' · ')}{x.cuiPartajat ? ' · CUI partajat' : ''}</div></button>
                   {x.radacina ? <Badge tone="blue">deschisă</Badge> : <Link className="btn btn-ghost btn-icon btn-sm" to={hrefFirma({ cui: x.cui, cod: x.cod })} aria-label={`Deschide fișa ${collapse(x.denumire)}`}><ExternalLink size={16} aria-hidden="true" /></Link>}
                 </div>))}</div>
                 {f.length > maxFirme && <button className="btn" style={{ alignSelf: 'center' }} onClick={() => setMaxFirme((m) => m + 60)}>Arată încă {Math.min(60, f.length - maxFirme)}</button>}

@@ -72,7 +72,7 @@ export interface StareNomenclator { cod: string; denumire: string }
 
 /* ───────── Graful administratorilor (GET /grup/*) ───────── */
 export type StratGrup = 'administrator' | 'profesional';
-export interface NodFirmaGrup { id: string; tip: 'firma'; cod: string; cui: string | null; denumire: string; nivel: number; radacina: boolean }
+export interface NodFirmaGrup { id: string; tip: 'firma'; cod: string; coduri: string[]; cuiPartajat: boolean; cui: string | null; denumire: string; nivel: number; radacina: boolean }
 export interface NodPersoanaGrup { id: string; tip: 'persoana'; nume: string; data: string; slaba: boolean; nivel: number; nrFirme: number; calitati: string[] }
 export interface MuchieGrup { persoana: string; firma: string; calitate: string; strat: StratGrup; slaba: boolean }
 export interface NeconfirmatGrup { nume: string; data: string | null; calitate: string; strat: StratGrup; motiv: 'fara-data' | 'data-slaba' }

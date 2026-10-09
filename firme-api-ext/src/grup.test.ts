@@ -3,11 +3,14 @@ import { cheiePersoana, construiesteGraf, esteSlaba, idPersoana, type Deps, type
 
 const R = (cod: string, nume: string, data: string | null, calitate = 'administrator'): Rep => ({ cod, nume, data, calitate });
 
+const INFO: Record<string, { denumire: string; cui: string | null }> = {};
+const info = (c: string) => INFO[c] ?? { denumire: `Firma ${c}`, cui: c === 'F9' ? '0' : `9${c}` }; // CUI diferit pentru fiecare cod, ca testele vechi să rămână valabile
+
 function deps(reps: Rep[]): Deps {
   return {
     repsDeFirme: async (cods: string[]) => reps.filter((r) => cods.includes(r.cod)),
     repsDePersoane: async (chei: { nume: string; data: string }[], doar: readonly string[] | null) => reps.filter((r) => r.data && chei.some((k: { nume: string; data: string }) => k.nume === r.nume && k.data === r.data) && (!doar || doar.includes(r.calitate))),
-    firme: async (cods: string[]) => new Map(cods.map((c: string) => [c, { denumire: `Firma ${c}`, cui: c === 'F9' ? '0' : `${c.length}00` }])),
+    firme: async (cods: string[]) => new Map(cods.map((c: string) => [c, info(c)])),
   };
 }
 const rad = { cod: 'F0', cui: '123', denumire: 'Radacina' };
@@ -92,5 +95,39 @@ describe('graful administratorilor', () => {
   it('aceeași persoană cu două calități la aceeași firmă dă două muchii, nu un duplicat', async () => {
     const g = await construiesteGraf(deps([R('F0', 'A', '02/02/1970'), R('F0', 'A', '02/02/1970'), R('F0', 'A', '02/02/1970', 'administrator si reprezentant')]), rad, { adancime: 1 });
     expect(g.muchii).toHaveLength(2);
+  });
+});
+
+describe('aceeași firmă cu mai multe numere de înmatriculare', () => {
+  const reps = [R('F0', 'ION', '01/02/1970'), R('F1', 'ION', '01/02/1970'), R('F1B', 'ION', '01/02/1970'), R('F2', 'ION', '01/02/1970'), R('F3', 'ION', '01/02/1970')];
+  const seteaza = (o: Record<string, { denumire: string; cui: string | null }>) => { for (const k of Object.keys(INFO)) delete INFO[k]; Object.assign(INFO, o); };
+
+  it('același CUI + aceeași denumire (mutare de sediu) devin un singur nod, cu toate codurile păstrate', async () => {
+    seteaza({ F1: { denumire: 'ALIPOT S.R.L.', cui: '4921121' }, F1B: { denumire: 'ALIPOT SRL', cui: '4921121' }, F2: { denumire: 'ALTA', cui: '222' }, F3: { denumire: 'ALTA2', cui: '333' } });
+    const g = await construiesteGraf(deps(reps), rad, { adancime: 1 });
+    const firme = g.noduri.filter((n) => n.tip === 'firma');
+    expect(firme).toHaveLength(4); // rădăcina + ALIPOT (o singură dată) + 2 firme
+    const alipot = firme.find((n) => n.tip === 'firma' && n.cui === '4921121');
+    expect(alipot).toMatchObject({ coduri: ['F1', 'F1B'], cuiPartajat: false });
+    expect(g.muchii.filter((m) => m.firma === alipot!.id)).toHaveLength(1); // muchiile duplicate se unesc
+  });
+  it('înmatricularea veche a rădăcinii se alipește rădăcinii, nu apare ca „altă firmă”', async () => {
+    seteaza({ F1: { denumire: 'RADACINA SRL', cui: '123' }, F2: { denumire: 'X', cui: '5' }, F1B: { denumire: 'Y', cui: '6' }, F3: { denumire: 'Z', cui: '7' } });
+    const g = await construiesteGraf(deps(reps), { cod: 'F0', cui: '123', denumire: 'Radacina S.R.L.' }, { adancime: 1 });
+    const r = g.noduri.find((n) => n.tip === 'firma' && n.radacina);
+    expect(r).toMatchObject({ coduri: ['F0', 'F1'] });
+    expect(g.noduri.filter((n) => n.tip === 'firma')).toHaveLength(4);
+  });
+  it('același CUI cu denumiri diferite NU se contopește: se marchează cuiPartajat', async () => {
+    seteaza({ F1: { denumire: 'AKMEVIZYON SRL', cui: '18972397' }, F1B: { denumire: 'BG RONTEX SRL', cui: '18972397' }, F2: { denumire: 'A', cui: '2' }, F3: { denumire: 'B', cui: '3' } });
+    const g = await construiesteGraf(deps(reps), rad, { adancime: 1 });
+    const partajate = g.noduri.filter((n) => n.tip === 'firma' && n.cuiPartajat);
+    expect(partajate.map((n) => n.tip === 'firma' && n.denumire).sort()).toEqual(['AKMEVIZYON SRL', 'BG RONTEX SRL']);
+    expect(g.noduri.filter((n) => n.tip === 'firma')).toHaveLength(5);
+  });
+  it('CUI 0 sau lipsă nu contopește nimic', async () => {
+    seteaza({ F1: { denumire: 'SAME SRL', cui: '0' }, F1B: { denumire: 'SAME SRL', cui: '0' }, F2: { denumire: 'A', cui: '2' }, F3: { denumire: 'B', cui: '3' } });
+    const g = await construiesteGraf(deps(reps), rad, { adancime: 1 });
+    expect(g.noduri.filter((n) => n.tip === 'firma')).toHaveLength(5); // F1 și F1B rămân distincte: fără CUI utilizabil nu avem pe ce să le unim
   });
 });

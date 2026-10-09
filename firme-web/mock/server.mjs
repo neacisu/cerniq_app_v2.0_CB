@@ -36,9 +36,9 @@ function grup(cod, u) {
   const adancime = Number(u.searchParams.get('adancime') ?? 1), plafon = Number(u.searchParams.get('plafon') ?? 120);
   const prof = u.searchParams.get('profesionisti') === 'true', slabe = u.searchParams.get('slabe') !== 'false';
   const fara = u.searchParams.getAll('fara'), faraRoluri = u.searchParams.getAll('faraRoluri');
-  const F = (c, den, nivel) => ({ id: `f:${c}`, tip: 'firma', cod: c, cui: c.length % 2 ? '1234' + c.length : null, denumire: den, nivel, radacina: false });
+  const F = (c, den, nivel) => ({ id: `f:${c}`, tip: 'firma', cod: c, coduri: [c], cuiPartajat: false, cui: c.length % 2 ? '1234' + c.length : null, denumire: den, nivel, radacina: false });
   const P = (nume, data, nivel, nrFirme, calitati) => ({ id: `p:${nume}|${data}`, tip: 'persoana', nume, data, slaba: data.startsWith('01/01'), nivel, nrFirme, calitati });
-  const noduri = [{ id: `f:${root.cod}`, tip: 'firma', cod: root.cod, cui: root.cui, denumire: root.den, nivel: 0, radacina: true }];
+  const noduri = [{ id: `f:${root.cod}`, tip: 'firma', cod: root.cod, coduri: [root.cod], cuiPartajat: false, cui: root.cui, denumire: root.den, nivel: 0, radacina: true }];
   const muchii = [], neconfirmate = [];
   const leaga = (p, c, calitate = 'administrator', slaba = false) => { if (!faraRoluri.includes(calitate)) muchii.push({ persoana: p.id, firma: `f:${c}`, calitate, strat: calitate === 'administrator' ? 'administrator' : 'profesional', slaba }); };
   const ion = P('POPESCU ION', '12/03/1980', 0, 7, ['administrator']);

@@ -41,8 +41,11 @@ export interface Deps {
   firme(cods: string[]): Promise<Map<string, FirmaInfo>>;
 }
 
+import { bazaDenumire } from './dosare.js';
+
 export type Strat = 'administrator' | 'profesional';
-export interface NodFirma { id: string; tip: 'firma'; cod: string; cui: string | null; denumire: string; nivel: number; radacina: boolean }
+/** `coduri`: toate numerele de înmatriculare ale aceleiași firme (mutările de sediu între județe schimbă numărul, nu CUI-ul). */
+export interface NodFirma { id: string; tip: 'firma'; cod: string; coduri: string[]; cuiPartajat: boolean; cui: string | null; denumire: string; nivel: number; radacina: boolean }
 export interface NodPersoana { id: string; tip: 'persoana'; nume: string; data: string; slaba: boolean; nivel: number; nrFirme: number; calitati: string[] }
 export interface Muchie { persoana: string; firma: string; calitate: string; strat: Strat; slaba: boolean }
 export interface Neconfirmat { nume: string; data: string | null; calitate: string; strat: Strat; motiv: 'fara-data' | 'data-slaba' }
@@ -80,6 +83,37 @@ export function normalizeaza(opt: Partial<Optiuni>): Optiuni {
 
 interface PersoanaAcc { id: string; nume: string; data: string; nivel: number; nrFirme: number; calitati: Set<string> }
 
+/**
+ * Aceeași firmă poate avea mai multe numere de înmatriculare (mutări de sediu): același CUI și aceeași denumire de bază.
+ * Ele devin un singur nod, cu toate codurile păstrate. Același CUI cu denumiri diferite NU se contopește (conflict în sursă):
+ * nodurile rămân separate și sunt marcate `cuiPartajat`.
+ */
+export function contopesteFirme(noduri: Map<string, NodFirma>, muchii: Map<string, Muchie>): void {
+  const grupe = new Map<string, NodFirma[]>();
+  for (const f of noduri.values()) if (cuiUtilizabil(f.cui)) { const k = `${f.cui}|${bazaDenumire(f.denumire)}`; grupe.set(k, [...(grupe.get(k) ?? []), f]); }
+  const redirect = new Map<string, string>();
+  for (const g of grupe.values()) {
+    if (g.length < 2) continue;
+    const canon = g.find((f) => f.radacina) ?? [...g].sort((a, b) => a.nivel - b.nivel || a.cod.localeCompare(b.cod))[0]!;
+    for (const f of g) {
+      if (f === canon) continue;
+      canon.coduri = [...new Set([...canon.coduri, ...f.coduri])].sort();
+      canon.nivel = Math.min(canon.nivel, f.nivel);
+      redirect.set(f.id, canon.id); noduri.delete(f.id);
+    }
+  }
+  if (redirect.size > 0) {
+    const vechi = [...muchii.values()]; muchii.clear();
+    for (const m of vechi) {
+      const firma = redirect.get(m.firma) ?? m.firma; const k = `${m.persoana}>${firma}>${m.calitate}`;
+      const ex = muchii.get(k); if (ex) ex.slaba = ex.slaba || m.slaba; else muchii.set(k, { ...m, firma });
+    }
+  }
+  const dupaCui = new Map<string, Set<string>>();
+  for (const f of noduri.values()) if (cuiUtilizabil(f.cui)) dupaCui.set(f.cui, (dupaCui.get(f.cui) ?? new Set()).add(bazaDenumire(f.denumire)));
+  for (const f of noduri.values()) if (cuiUtilizabil(f.cui) && (dupaCui.get(f.cui)?.size ?? 0) > 1) f.cuiPartajat = true;
+}
+
 export async function construiesteGraf(deps: Deps, radacina: { cod: string; cui: string | null; denumire: string }, optiuni: Partial<Optiuni>): Promise<Graf> {
   const o = normalizeaza(optiuni);
   const fara = new Set(o.fara), faraRoluri = new Set(o.faraRoluri);
@@ -107,7 +141,7 @@ export async function construiesteGraf(deps: Deps, radacina: { cod: string; cui:
   const unibila = (r: Rep): boolean => !!r.data && (o.dateSlabe || !esteSlaba(r.data));
 
   // Rădăcina
-  noduriFirme.set(idFirma(radacina.cod), { id: idFirma(radacina.cod), tip: 'firma', cod: radacina.cod, cui: cuiUtilizabil(radacina.cui) ? radacina.cui : null, denumire: radacina.denumire, nivel: 0, radacina: true });
+  noduriFirme.set(idFirma(radacina.cod), { id: idFirma(radacina.cod), tip: 'firma', cod: radacina.cod, coduri: [radacina.cod], cuiPartajat: false, cui: cuiUtilizabil(radacina.cui) ? radacina.cui : null, denumire: radacina.denumire, nivel: 0, radacina: true });
   buget -= 1;
 
   // Nivelul 0: administratorii firmei deschise
@@ -154,7 +188,7 @@ export async function construiesteGraf(deps: Deps, radacina: { cod: string; cui:
     }
     for (const cod of [...candidate].sort()) {
       if (buget <= 0) { omiseFirme.add(cod); trunchiat = true; continue; }
-      noduriFirme.set(idFirma(cod), { id: idFirma(cod), tip: 'firma', cod, cui: null, denumire: cod, nivel: 1, radacina: false });
+      noduriFirme.set(idFirma(cod), { id: idFirma(cod), tip: 'firma', cod, coduri: [cod], cuiPartajat: false, cui: null, denumire: cod, nivel: 1, radacina: false });
       firmeNivel1.add(cod); buget--;
     }
     for (const [id, rows] of legaturi) for (const r of rows) if (firmeNivel1.has(r.cod)) { numaraRol(r.calitate); addMuchie(id, idFirma(r.cod), r.calitate, esteSlaba(r.data!)); }
@@ -184,7 +218,7 @@ export async function construiesteGraf(deps: Deps, radacina: { cod: string; cui:
       for (const cod of firmeNoi) {
         if (!noduriFirme.has(idFirma(cod))) {
           if (buget <= 0) { omiseFirme.add(cod); trunchiat = true; continue; }
-          noduriFirme.set(idFirma(cod), { id: idFirma(cod), tip: 'firma', cod, cui: null, denumire: cod, nivel: 2, radacina: false }); buget--;
+          noduriFirme.set(idFirma(cod), { id: idFirma(cod), tip: 'firma', cod, coduri: [cod], cuiPartajat: false, cui: null, denumire: cod, nivel: 2, radacina: false }); buget--;
         }
         for (const r of rows) if (r.cod === cod) { numaraRol(r.calitate); addMuchie(id, idFirma(cod), r.calitate, n.slaba); }
       }
@@ -197,6 +231,8 @@ export async function construiesteGraf(deps: Deps, radacina: { cod: string; cui:
     const info = await deps.firme(necunoscute);
     for (const f of noduriFirme.values()) { const i = info.get(f.cod); if (i && !f.radacina) { f.denumire = i.denumire; f.cui = cuiUtilizabil(i.cui) ? i.cui : null; } }
   }
+
+  contopesteFirme(noduriFirme, muchii);
 
   // Persoanele fără nicio muchie rămasă (de exemplu după plafon) nu se desenează
   const cuMuchii = new Set([...muchii.values()].map((m) => m.persoana));
